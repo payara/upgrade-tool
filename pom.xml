@@ -43,10 +43,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <version>1.3-SNAPSHOT</version>
 
     <groupId>fish.payara.extras</groupId>
     <artifactId>payara-upgrade-tool</artifactId>
+    <version>1.3-SNAPSHOT</version>
     <packaging>glassfish-jar</packaging>
     <name>Payara Upgrade Tool</name>
 
@@ -55,7 +55,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <server-mgmt.version>5.35.0-SNAPSHOT</server-mgmt.version>
+        <payara.version>5.35.0-SNAPSHOT</payara.version>
     </properties>
 
 
@@ -76,7 +76,7 @@
         <dependency>
             <groupId>fish.payara.server.internal.admin</groupId>
             <artifactId>server-mgmt</artifactId>
-            <version>${server-mgmt.version}</version>
+            <version>${payara.version}</version>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>

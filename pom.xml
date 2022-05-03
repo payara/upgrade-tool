@@ -259,5 +259,13 @@
             </plugins>
         </pluginManagement>
 
+        <resources>
+            <resource>
+                <directory>src/main/manpages</directory>
+                <includes>
+                    <include>**/*.1</include>
+                </includes>
+            </resource>
+        </resources>
     </build>
 </project>

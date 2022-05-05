@@ -228,7 +228,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         SshAuth sshAuth = sshConnector.getSshAuth();
         command.add(SystemPropertyConstants.getAdminScriptLocation(glassfishDir));
         command.add("--interactive=false");
-        if (!ok(sshAuth.getKeyfile())) {
+        if (ok(sshAuth.getPassword())) {
             command.add("--passwordfile");
             command.add("-");
         }

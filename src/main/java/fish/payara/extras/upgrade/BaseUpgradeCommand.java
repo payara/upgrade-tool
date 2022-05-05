@@ -224,21 +224,24 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     protected boolean reinstallSSHNode(Node node) {
         LOGGER.log(Level.INFO, "Reinstalling SSH node {0}", new Object[]{node.getName()});
         ArrayList<String> command = new ArrayList<>();
+        SshConnector sshConnector = node.getSshConnector();
+        SshAuth sshAuth = sshConnector.getSshAuth();
         command.add(SystemPropertyConstants.getAdminScriptLocation(glassfishDir));
         command.add("--interactive=false");
-        command.add("--passwordfile");
-        command.add("-");
+        if (ok(sshAuth.getPassword())) {
+            command.add("--passwordfile");
+            command.add("-");
+        }
 
         command.add("install-node-ssh");
+
         command.add("--installdir");
         command.add(node.getInstallDir());
 
         command.add("--force"); //override files already there
 
-        SshConnector sshConnector = node.getSshConnector();
         command.add("--sshport");
         command.add(sshConnector.getSshPort());
-        SshAuth sshAuth = sshConnector.getSshAuth();
         command.add("--sshuser");
         command.add(sshAuth.getUserName());
         if (ok(sshAuth.getKeyfile())) {
@@ -250,9 +253,12 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
 
         ProcessManager processManager = new ProcessManager(command);
         processManager.setStdinLines(getPasswords(sshAuth));
+
         processManager.setTimeoutMsec(DEFAULT_TIMEOUT_MSEC);
         processManager.setEcho(logger.isLoggable(Level.SEVERE));
 
+
+        logger.log(Level.FINE, "Executing command: {0}", command);
         boolean commandSuccess = true;
         try {
             processManager.execute();
@@ -261,6 +267,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             }
         } catch (ProcessManagerException ex) {
             logger.log(Level.SEVERE, "Error while executing command: {0}", ex.getMessage());
+            commandSuccess = false;
         }
 
         return commandSuccess;

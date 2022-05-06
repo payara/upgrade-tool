@@ -271,6 +271,11 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         } catch (ProcessManagerException ex) {
             logger.log(Level.SEVERE, "Error while executing command: {0}", ex.getMessage());
             commandSuccess = false;
+
+            if (ex.getMessage().contains("process hasn't exited")) {
+                logger.log(Level.SEVERE, "ProcessManager executing `install-node-ssh` command did not exit - " +
+                        "it may have timed out.");
+            }
         }
 
         return commandSuccess;

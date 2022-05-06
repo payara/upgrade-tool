@@ -165,18 +165,23 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             logger.log(Level.INFO, "Reinstalling nodes for domain " + domaindir.getName());
             boolean throwException = false;
             List<String> failingNodes = new ArrayList<>();
-            for (Node node : doc.getRoot().createProxy(Domain.class).getNodes().getNode()) {
-                if (node.getType().equals("SSH")) {
-                    boolean commandSuccess = reinstallSSHNode(node);
-                    if (!commandSuccess) {
-                        throwException = true;
-                        failingNodes.add(node.getName());
+            List<Node> nodes = doc.getRoot().createProxy(Domain.class).getNodes().getNode();
+            if (!nodes.isEmpty()) {
+                for (Node node : nodes) {
+                    if (node.getType().equals("SSH")) {
+                        boolean commandSuccess = reinstallSSHNode(node);
+                        if (!commandSuccess) {
+                            throwException = true;
+                            failingNodes.add(node.getName());
+                        }
+                    } else if(!node.isDefaultLocalNode()) {
+                        logger.log(Level.WARNING, String.format("Only the SSH nodes are upgraded by this tool, " +
+                                        "please upgrade your node with name %s of type %s manually", node.getName(),
+                                node.getType()));
                     }
-                } else if(!node.isDefaultLocalNode()) {
-                    logger.log(Level.WARNING, String.format("Only the SSH nodes are upgraded by this tool, " +
-                                    "please upgrade your node with name %s of type %s manually", node.getName(),
-                            node.getType()));
                 }
+            } else {
+                logger.log(Level.FINE, "No nodes found for domain {0}", domaindir.getName());
             }
 
             if (throwException) {

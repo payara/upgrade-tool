@@ -78,55 +78,61 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
     @Override
     protected int executeCommand() {
         if (!Paths.get(glassfishDir, "modules.old").toFile().exists()) {
-            LOGGER.log(Level.SEVERE, "No old version found to rollback");
+            logger.log(Level.SEVERE, "No old version found to rollback");
             return ERROR;
         }
 
-        LOGGER.log(Level.INFO, "Rolling back server...");
+        logger.log(Level.INFO, "Rolling back server...");
 
         // First up, remove any "staged" install
         try {
             deleteStagedInstall();
         } catch (IOException ioe) {
-            LOGGER.log(Level.SEVERE, "Error cleaning up previous staged upgrade, aborting rollback: {0}",
+            logger.log(Level.SEVERE, "Error cleaning up previous staged upgrade, aborting rollback: {0}",
                     ioe.toString());
             return ERROR;
         }
 
         // Second step, move "current" into "staged"
         try {
-            LOGGER.log(Level.FINE, "Moving current install into a staged rollback directory");
+            logger.log(Level.FINE, "Moving current install into a staged rollback directory");
             for (String file : moveFolders) {
                 try {
-                    Files.move(Paths.get(glassfishDir, file), Paths.get(glassfishDir, file + ".new"),
+                    Path currentDirectory = Paths.get(glassfishDir, file);
+                    Path newDirectory = Paths.get(glassfishDir, file + ".new");
+                    logger.log(Level.FINER, "Moving {0} into staged rollback directory {1}",
+                            new Object[]{currentDirectory.toString(), newDirectory.toString()});
+                    Files.move(currentDirectory, newDirectory,
                             StandardCopyOption.REPLACE_EXISTING);
+                    logger.log(Level.FINEST, "Moved {0} into staged rollback directory {1}",
+                            new Object[]{currentDirectory.toString(), newDirectory.toString()});
                 } catch (NoSuchFileException nsfe) {
                     // We can't nicely check if the current or old installation is a web distribution or not, so just
                     // attempt to move all and specifically catch a NSFE for the MQ directory
                     if (nsfe.getMessage().contains(
                             "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
-                        LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                     // osgi-cache directory is created when the domain is started, if it was never started the
                     // directory will not exist so it's safe to ignore the NSFE
                     } if (nsfe.getMessage().contains("osgi-cache")) {
-                        LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for osgi-cache directory under the " +
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for osgi-cache directory under the " +
                                 "assumption the upgraded domain was never started. Continuing to move files...");
                     } else {
                         throw nsfe;
                     }
                 }
             }
-            LOGGER.log(Level.FINE, "Moved current install into a staged rollback directory");
+            logger.log(Level.FINE, "Moved current install into a staged rollback directory");
         } catch (IOException ioe) {
-            LOGGER.log(Level.SEVERE, "Error rolling back current install: {0}", ioe.toString());
+            logger.log(Level.SEVERE, "Error rolling back current install: {0}", ioe.toString());
 
             // Attempt to undo the rollback
-            LOGGER.log(Level.INFO, "Attempting to undo rollback");
+            logger.log(Level.INFO, "Attempting to undo rollback");
             try {
                 moveStagedToCurrent();
             } catch (IOException ioe1) {
-                LOGGER.log(Level.SEVERE, "Error undoing rollback: {0}", ioe1.toString());
+                logger.log(Level.SEVERE, "Error undoing rollback: {0}", ioe1.toString());
             }
 
             return ERROR;
@@ -134,22 +140,28 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
 
         // Third step, move "old" into "current"
         try {
+            logger.log(Level.FINE, "Moving old install back into current install");
             for (String file : moveFolders) {
                 try {
-                    Files.move(Paths.get(glassfishDir, file + ".old"), Paths.get(glassfishDir, file),
-                            StandardCopyOption.REPLACE_EXISTING);
+                    Path oldDirectory = Paths.get(glassfishDir, file + ".old");
+                    Path currentDirectory = Paths.get(glassfishDir, file);
+                    logger.log(Level.FINER, "Moving old directory {0} into current install directory {1}",
+                            new Object[]{oldDirectory.toString(), currentDirectory.toString()});
+                    Files.move(oldDirectory, currentDirectory, StandardCopyOption.REPLACE_EXISTING);
+                    logger.log(Level.FINEST, "Moved old directory {0} into current install directory {1}",
+                            new Object[]{oldDirectory.toString(), currentDirectory.toString()});
                 } catch (NoSuchFileException nsfe) {
                     // We can't nicely check if the current or old installation is a web distribution or not, so just
                     // attempt to move all and specifically catch a NSFE for the MQ directory
                     if (nsfe.getMessage().contains(
                             "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
-                        LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                     }
                     // osgi-cache directory is created when the domain is started, if it was never started before the
                     // upgrade the directory will not exist so it's safe to ignore the NSFE
                     if (nsfe.getMessage().contains("osgi-cache")) {
-                        LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for osgi-cache directory under the " +
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for osgi-cache directory under the " +
                             "assumption the upgraded domain was never started. Continuing to move files...");
                     } else {
                         throw nsfe;
@@ -157,16 +169,16 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
                 }
             }
         } catch (IOException ioe) {
-            LOGGER.log(Level.SEVERE, "Error rolling back current install: {0}", ioe.toString());
+            logger.log(Level.SEVERE, "Error rolling back current install: {0}", ioe.toString());
 
             // Attempt to undo the rollback
-            LOGGER.log(Level.INFO, "Attempting to undo rollback");
+            logger.log(Level.INFO, "Attempting to undo rollback");
 
             // First up, move "current" back to "old"
             try {
                 moveCurrentToOld();
             } catch (IOException ioe1) {
-                LOGGER.log(Level.SEVERE, "Error undoing rollback: {0}", ioe1.toString());
+                logger.log(Level.SEVERE, "Error undoing rollback: {0}", ioe1.toString());
                 return ERROR;
             }
 
@@ -174,7 +186,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
             try {
                 moveStagedToCurrent();
             } catch (IOException ioe1) {
-                LOGGER.log(Level.SEVERE, "Error undoing rollback: {0}", ioe1.toString());
+                logger.log(Level.SEVERE, "Error undoing rollback: {0}", ioe1.toString());
             }
 
             return ERROR;
@@ -182,23 +194,23 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
 
         // Fourth step, roll back the nodes for all domains
         try {
-            LOGGER.log(Level.INFO, "Rolling back nodes");
+            logger.log(Level.INFO, "Rolling back nodes");
             reinstallNodes();
-            LOGGER.log(Level.INFO, "Rolled back nodes");
+            logger.log(Level.INFO, "Rolled back nodes");
         } catch (IOException | ConfigurationException ex) {
             // IOException or ConfigurationException occurs when parsing the domain.xml, before any attempt to
             // update the nodes. It gets thrown if the domain.xml couldn't be found, or if the domain.xml is
             // somehow incorrect, which implies something has gone wrong - rollback
-            LOGGER.log(Level.SEVERE, "Error rolling back nodes: {0}", ex.toString());
+            logger.log(Level.SEVERE, "Error rolling back nodes: {0}", ex.toString());
 
             // Attempt to undo the rollback
-            LOGGER.log(Level.INFO, "Attempting to undo rollback");
+            logger.log(Level.INFO, "Attempting to undo rollback");
 
             // First up, move "current" back to "old"
             try {
                 moveCurrentToOld();
             } catch (IOException ioe) {
-                LOGGER.log(Level.SEVERE, "Error undoing rollback: {0}", ioe.toString());
+                logger.log(Level.SEVERE, "Error undoing rollback: {0}", ioe.toString());
                 return ERROR;
             }
 
@@ -206,7 +218,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
             try {
                 moveStagedToCurrent();
             } catch (IOException ioe) {
-                LOGGER.log(Level.SEVERE, "Error undoing rollback: {0}", ioe.toString());
+                logger.log(Level.SEVERE, "Error undoing rollback: {0}", ioe.toString());
                 return ERROR;
             }
 
@@ -215,7 +227,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
         } catch (CommandException ce) {
             // CommandException gets thrown once all nodes have been attempted to be rolled back and if at
             // least one roll back hit an error. We don't want to undo the roll back since the failure might be valid
-            LOGGER.log(Level.WARNING, "Failed to roll back all nodes: inspect the logs from this command for " +
+            logger.log(Level.WARNING, "Failed to roll back all nodes: inspect the logs from this command for " +
                             "the reasons. You can roll back the node installs individually using the " +
                             "rollback-server command on each node, or attempt to roll them all back again using the " +
                             "reinstall-nodes command. \n{0}",
@@ -232,7 +244,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
             deleteStagedInstall();
         } catch (IOException ioe) {
             // Log the error, but we don't need to fail the command and exit out at this point
-            LOGGER.log(Level.WARNING, "Error cleaning up rolled back upgrade: {0}", ioe.toString());
+            logger.log(Level.WARNING, "Error cleaning up rolled back upgrade: {0}", ioe.toString());
             logWarning = true;
         }
 
@@ -243,7 +255,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
             restoreDomains();
             restoreOsgiCache(tempOsgiCacheDirs);
         } catch (CommandException | IOException ce) {
-            LOGGER.log(Level.WARNING, "Error restore-domain command! " +
+            logger.log(Level.WARNING, "Error restore-domain command! " +
                     "Please restore your domain config manually. \n{0}", ce.toString());
             logWarning = true;
         }
@@ -256,13 +268,14 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
     }
 
     private void moveStagedToCurrent() throws IOException {
-        LOGGER.log(Level.INFO, "Moving staged back to current");
+        logger.log(Level.INFO, "Moving staged back to current");
         for (String file : moveFolders) {
             Path stagedPath = Paths.get(glassfishDir, file + ".new");
             Path targetPath = Paths.get(glassfishDir, file);
 
             // Only move the stuff that exists - if it doesn't, it implies it was never moved to begin with
             if (!stagedPath.toFile().exists()) {
+                logger.log(Level.FINEST, "Staged file {0} does not exist, skipping", stagedPath.toString());
                 continue;
             }
 
@@ -274,17 +287,18 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
         // Now delete
         deleteStagedInstall();
 
-        LOGGER.log(Level.INFO, "Moved staged back to current");
+        logger.log(Level.INFO, "Moved staged back to current");
     }
 
     private void moveCurrentToOld() throws IOException {
-        LOGGER.log(Level.INFO, "Moving current install back to old");
+        logger.log(Level.INFO, "Moving current install back to old");
         for (String file : moveFolders) {
             Path currentPath = Paths.get(glassfishDir, file);
             Path targetPath = Paths.get(glassfishDir, file + ".old");
 
             // Only move the stuff that exists - if it doesn't, it implies it was never moved to begin with
             if (!currentPath.toFile().exists()) {
+                logger.log(Level.FINEST, "Current install file {0} does not exist, skipping", currentPath.toString());
                 continue;
             }
 
@@ -296,7 +310,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
         // Now delete
         deleteCurrentInstall();
 
-        LOGGER.log(Level.INFO, "Moved current install back to old");
+        logger.log(Level.INFO, "Moved current install back to old");
     }
 
     private void deleteCurrentInstall() throws IOException {
@@ -307,18 +321,23 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
             Path folderPath = Paths.get(glassfishDir, folder);
             if (folderPath.toFile().exists()) {
                 Files.walkFileTree(folderPath, visitor);
+            } else {
+                logger.log(Level.FINEST, "Current install file {0} does not exist, skipping", folderPath.toString());
             }
         }
     }
 
     private void restoreDomains() throws CommandException {
-        LOGGER.log(Level.INFO, "Restoring domain configs");
+        logger.log(Level.INFO, "Restoring domain configs");
         File[] domaindirs = getDomainsDir().listFiles(File::isDirectory);
         for (File domaindir : domaindirs) {
             CLICommand restoreDomainCommand = CLICommand.getCommand(habitat, "restore-domain");
             if (StringUtils.ok(domainDirParam)) {
+                logger.log(Level.FINE, "Executing command: {0}", "restore-domain --domaindir "
+                        + domainDirParam + " " + domaindir.getName());
                 restoreDomainCommand.execute("restore-domain", "--domaindir", domainDirParam, domaindir.getName());
             } else {
+                logger.log(Level.FINE, "Executing command: {0}", "restore-domain " + domaindir.getName());
                 restoreDomainCommand.execute("restore-domain", domaindir.getName());
             }
 
@@ -339,8 +358,14 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
             if (new File(domaindir + File.separator + "osgi-cache").exists()) {
                 Path tempDirectory = Files.createTempDirectory(domaindir.getName()+"-osgi-cache");
                 Path targetPath = Paths.get(domaindir + File.separator + "osgi-cache");
+                logger.log(Level.FINER, "Backing up osgi-cache {0} to temp directory {1}",
+                        new Object[]{targetPath.toString(), tempDirectory.toString()});
                 Files.move(targetPath, tempDirectory, StandardCopyOption.REPLACE_EXISTING);
+                logger.log(Level.FINEST, "Backed up osgi-cache {0} to temp directory {1}",
+                        new Object[]{targetPath.toString(), tempDirectory.toString()});
                 osgiCacheDirs.put(domaindir.getName(), tempDirectory);
+            } else {
+                logger.log(Level.FINEST, "No osgi-cache found for domain dir {0}, skipping", domaindir.toString());
             }
         }
         return osgiCacheDirs;
@@ -356,7 +381,11 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
         for (Map.Entry<String, Path> tempCacheDir : osgiCacheDirs.entrySet()) {
             Path targetPath = Paths.get(glassfishDir + File.separator + "domains" + File.separator +
                     tempCacheDir.getKey() + File.separator + "osgi-cache");
+            logger.log(Level.FINER, "Restoring osgi-cache {0} to current install directory {1}",
+                    new Object[]{tempCacheDir.getValue().toString(), targetPath.toString()});
             Files.move(tempCacheDir.getValue(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            logger.log(Level.FINEST, "Restored osgi-cache {0} to current install directory {1}",
+                    new Object[]{tempCacheDir.getValue().toString(), targetPath.toString()});
         }
     }
 

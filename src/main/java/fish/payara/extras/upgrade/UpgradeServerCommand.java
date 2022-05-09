@@ -331,7 +331,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         // Check if distribution is defined.
         // Continue with upgrade if no defined distribution, user should be able rollback if needed.
         if (versionDistribution.isEmpty()) {
-            logger.log(Level.INFO, "The distribution cannot be validated.");
+            logger.log(Level.WARNING, "The distribution cannot be validated.");
             return;
         }
 

@@ -115,8 +115,9 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     private static final String NEXUS_URL = System.getProperty("fish.payara.upgrade.repo.url",
             "https://nexus.payara.fish/repository/payara-enterprise-downloadable-artifacts/fish/payara/distributions/");
     private static final String ZIP = ".zip";
-
     private static final LocalStringsImpl strings = new LocalStringsImpl(CLICommand.class);
+
+    private static final String PERMISSIONS = "rwxr-xr-x";
 
     @Override
     protected void prevalidate() throws CommandException {
@@ -797,10 +798,10 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
             if (nadminPath.toFile().exists()) {
                 logger.log(Level.FINER, "Fixing file permissions for {0} to {1}",
-                        new Object[]{nadminPath.toString(), "rwxr-xr-x"});
-                Files.setPosixFilePermissions(nadminPath, PosixFilePermissions.fromString("rwxr-xr-x"));
+                        new Object[]{nadminPath.toString(), PERMISSIONS});
+                Files.setPosixFilePermissions(nadminPath, PosixFilePermissions.fromString(PERMISSIONS));
                 logger.log(Level.FINEST, "Fixed file permissions for {0} to {1}",
-                        new Object[]{nadminPath.toString(), "rwxr-xr-x"});
+                        new Object[]{nadminPath.toString(), PERMISSIONS});
             } else {
                 logger.log(Level.FINER, "File {0} does not exist, skipping", nadminPath.toString());
             }
@@ -812,10 +813,10 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
             if (nadminBatPath.toFile().exists()) {
                 logger.log(Level.FINER, "Fixing file permissions for {0} to {1}",
-                        new Object[]{nadminBatPath.toString(), "rwxr-xr-x"});
-                Files.setPosixFilePermissions(nadminBatPath, PosixFilePermissions.fromString("rwxr-xr-x"));
+                        new Object[]{nadminBatPath.toString(), PERMISSIONS});
+                Files.setPosixFilePermissions(nadminBatPath, PosixFilePermissions.fromString(PERMISSIONS));
                 logger.log(Level.FINEST, "Fixed file permissions for {0} to {1}",
-                        new Object[]{nadminBatPath.toString(), "rwxr-xr-x"});
+                        new Object[]{nadminBatPath.toString(), PERMISSIONS});
             } else {
                 logger.log(Level.FINER, "File {0} does not exist, skipping", nadminBatPath.toString());
             }
@@ -838,10 +839,10 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     file.getParent().getFileName().toString().equals("bin.new")) {
                 if (!OS.isWindows()) {
                     logger.log(Level.FINER, "Fixing file permissions for {0} to {1}",
-                            new Object[]{file.toString(), "rwxr-xr-x"});
-                    Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rwxr-xr-x"));
+                            new Object[]{file.toString(), PERMISSIONS});
+                    Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(PERMISSIONS));
                     logger.log(Level.FINEST, "Fixed file permissions for {0} to {1}",
-                            new Object[]{file.toString(), "rwxr-xr-x"});
+                            new Object[]{file.toString(), PERMISSIONS});
                 } else {
                     logger.log(Level.FINER,
                             "OS is Windows, skipping fixing file permissions for {0}", file.toString());

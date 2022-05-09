@@ -40,7 +40,6 @@
 
 package fish.payara.extras.upgrade;
 
-import com.sun.enterprise.admin.cli.CLICommand;
 import com.sun.enterprise.admin.servermgmt.cli.LocalDomainCommand;
 import com.sun.enterprise.config.serverbeans.Domain;
 import com.sun.enterprise.config.serverbeans.Node;
@@ -79,15 +78,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /**
  * Base class containing shared methods and variables used by other upgrade/rollback commands.
  */
 public abstract class BaseUpgradeCommand extends LocalDomainCommand {
-
-    protected static final Logger LOGGER = Logger.getLogger(CLICommand.class.getPackage().getName());
 
     // The property present in the upgrade-tool properties file
     protected static final String PAYARA_UPGRADE_DIRS_PROP = "PAYARA_UPGRADE_DIRS";
@@ -125,9 +121,11 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
 
         // Set up the install dir variable
         glassfishDir = getInstallRootPath();
+        logger.log(Level.FINEST, "glassfishDir resolved as {0}", glassfishDir);
 
         // Gets all folders and files to be moved in the upgrade process, including osgi-cache directories
         moveFolders = Stream.concat(Arrays.stream(CONSTANTMOVEFOLDERS), Arrays.stream(getOsgiCacheDirectories())).toArray((String[]::new));
+        logger.log(Level.FINEST, "moveFolders resolved as {0}", String.join(", ", moveFolders));
     }
 
     private String[] getOsgiCacheDirectories() {
@@ -157,28 +155,35 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             try {
                 parser.logUnrecognisedElements(false);
             } catch (NoSuchMethodError noSuchMethodError) {
-                LOGGER.log(Level.FINE,
+                logger.log(Level.FINE,
                         "Using a version of ConfigParser that does not support disabling log messages via method",
                         noSuchMethodError);
             }
 
             URL domainURL = domainXMLFile.toURI().toURL();
             DomDocument doc = parser.parse(domainURL);
-            LOGGER.log(Level.INFO, "Reinstalling nodes for domain " + domaindir.getName());
+            logger.log(Level.INFO, "Reinstalling nodes for domain " + domaindir.getName());
             boolean throwException = false;
             List<String> failingNodes = new ArrayList<>();
+            boolean foundNode = false;
             for (Node node : doc.getRoot().createProxy(Domain.class).getNodes().getNode()) {
                 if (node.getType().equals("SSH")) {
+                    foundNode = true;
                     boolean commandSuccess = reinstallSSHNode(node);
                     if (!commandSuccess) {
                         throwException = true;
                         failingNodes.add(node.getName());
                     }
-                } else if(!node.isDefaultLocalNode()) {
-                    LOGGER.log(Level.WARNING, String.format("Only the SSH nodes are upgraded by this tool, " +
+                } else if (!node.isDefaultLocalNode()) {
+                    foundNode = true;
+                    logger.log(Level.WARNING, String.format("Only the SSH nodes are upgraded by this tool, " +
                                     "please upgrade your node with name %s of type %s manually", node.getName(),
                             node.getType()));
                 }
+            }
+
+            if (!foundNode) {
+                logger.log(Level.FINE, "No nodes found for domain {0}", domaindir.getName());
             }
 
             if (throwException) {
@@ -195,7 +200,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
                 try {
                     urls.add(file.toURI().toURL());
                 } catch (MalformedURLException malformedURLException) {
-                    LOGGER.log(Level.SEVERE, "Error reading from modules directory "
+                    logger.log(Level.SEVERE, "Error reading from modules directory "
                             + Paths.get(glassfishDir, "modules"));
                     throw new CommandException(malformedURLException);
                 }
@@ -213,7 +218,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         try {
             serviceLocator = registry.createServiceLocator("default");
         } catch (MultiException multiException) {
-            LOGGER.log(Level.SEVERE, "Error creating service locator - something went wrong initialising " +
+            logger.log(Level.SEVERE, "Error creating service locator - something went wrong initialising " +
                     "service locator using modules directory " + Paths.get(glassfishDir, "modules"));
             throw new CommandException(multiException);
         }
@@ -222,7 +227,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     }
 
     protected boolean reinstallSSHNode(Node node) {
-        LOGGER.log(Level.INFO, "Reinstalling SSH node {0}", new Object[]{node.getName()});
+        logger.log(Level.INFO, "Reinstalling SSH node {0}", new Object[]{node.getName()});
         ArrayList<String> command = new ArrayList<>();
         SshConnector sshConnector = node.getSshConnector();
         SshAuth sshAuth = sshConnector.getSshAuth();
@@ -268,6 +273,11 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         } catch (ProcessManagerException ex) {
             logger.log(Level.SEVERE, "Error while executing command: {0}", ex.getMessage());
             commandSuccess = false;
+
+            if (ex.getMessage().contains("process hasn't exited")) {
+                logger.log(Level.SEVERE, "ProcessManager executing `install-node-ssh` command did not exit - " +
+                        "it may have timed out.");
+            }
         }
 
         return commandSuccess;
@@ -287,7 +297,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     }
 
     protected void deleteStagedInstall() throws IOException {
-        LOGGER.log(Level.FINE, "Deleting staged install if present");
+        logger.log(Level.FINE, "Deleting staged install if present");
         DeleteFileVisitor visitor = new DeleteFileVisitor();
         for (String folder : moveFolders) {
             // Only attempt to delete folders which exist
@@ -295,9 +305,11 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             Path folderPath = Paths.get(glassfishDir, folder + ".new");
             if (folderPath.toFile().exists()) {
                 Files.walkFileTree(folderPath, visitor);
+            } else {
+                logger.log(Level.FINEST, "Staged file {0} does not exist, skipping", folderPath.toString());
             }
         }
-        LOGGER.log(Level.FINE, "Deleted staged install");
+        logger.log(Level.FINE, "Deleted staged install");
     }
 
     protected class CopyFileVisitor implements FileVisitor<Path> {
@@ -317,15 +329,20 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
 
         @Override
         public FileVisitResult visitFile(Path arg0, BasicFileAttributes arg1) throws IOException {
+            logger.log(Level.FINER, "Copying file {0}", arg0.toString());
+
             Path resolvedPath = targetPath.resolve(sourcePath.relativize(arg0));
+            logger.log(Level.FINEST, "Copying to {0}", resolvedPath.toString());
 
             File parentFile = resolvedPath.toFile().getParentFile();
             if (!parentFile.exists()) {
+                logger.log(Level.FINEST, "Parent file does not exist, creating: {0}", parentFile.toString());
                 parentFile.mkdirs();
             }
 
             Files.copy(arg0, resolvedPath, StandardCopyOption.REPLACE_EXISTING);
 
+            logger.log(Level.FINEST, "Copied file {0} to {1}", new Object[]{arg0.toString(), resolvedPath.toString()});
             return FileVisitResult.CONTINUE;
         }
 
@@ -335,12 +352,12 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             // optional with "useDownloaded"), so specifically catch a NSFE for the MQ directory.
             if (arg1 instanceof NoSuchFileException && arg1.getMessage().contains(
                     "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
-                LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
+                logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                         "this is a payara-web distribution. Continuing copy...");
                 return FileVisitResult.SKIP_SUBTREE;
             }
 
-            LOGGER.log(Level.SEVERE, "File could not visited: {0}", arg0.toString());
+            logger.log(Level.SEVERE, "File could not visited: {0}", arg0.toString());
             throw arg1;
         }
 
@@ -360,7 +377,9 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
 
         @Override
         public FileVisitResult visitFile(Path arg0, BasicFileAttributes arg1) throws IOException {
+            logger.log(Level.FINER, "Deleting file {0}", arg0.toString());
             arg0.toFile().delete();
+            logger.log(Level.FINEST, "Deleted file {0}", arg0.toString());
             return FileVisitResult.CONTINUE;
         }
 
@@ -368,18 +387,20 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         public FileVisitResult visitFileFailed(Path arg0, IOException arg1) throws IOException {
             // Don't fail out on NSFE, just try to delete all of them
             if (arg1 instanceof NoSuchFileException) {
-                LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for directory {0} and continuing cleanup.",
+                logger.log(Level.FINE, "Ignoring NoSuchFileException for directory {0} and continuing cleanup.",
                         arg0.toString());
                 return FileVisitResult.SKIP_SUBTREE;
             }
 
-            LOGGER.log(Level.SEVERE, "File could not deleted: {0}", arg0.toString());
+            logger.log(Level.SEVERE, "File could not deleted: {0}", arg0.toString());
             throw arg1;
         }
 
         @Override
         public FileVisitResult postVisitDirectory(Path arg0, IOException arg1) throws IOException {
+            logger.log(Level.FINER, "Deleting file {0}", arg0.toString());
             arg0.toFile().delete();
+            logger.log(Level.FINEST, "Deleted file {0}", arg0.toString());
             return FileVisitResult.CONTINUE;
         }
 

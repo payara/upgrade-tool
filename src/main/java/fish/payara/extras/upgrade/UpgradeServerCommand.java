@@ -115,8 +115,9 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     private static final String NEXUS_URL = System.getProperty("fish.payara.upgrade.repo.url",
             "https://nexus.payara.fish/repository/payara-enterprise-downloadable-artifacts/fish/payara/distributions/");
     private static final String ZIP = ".zip";
-
     private static final LocalStringsImpl strings = new LocalStringsImpl(CLICommand.class);
+
+    private static final String PERMISSIONS = "rwxr-xr-x";
 
     @Override
     protected void prevalidate() throws CommandException {
@@ -318,6 +319,8 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
      * @throws CommandException If the distribution doesn't match.
      */
     private void validateDistribution() throws CommandValidationException {
+        logger.log(Level.FINER, "Validating distribution");
+
         // Get current Payara distribution
         String versionDistribution = "";
         try {
@@ -329,7 +332,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         // Check if distribution is defined.
         // Continue with upgrade if no defined distribution, user should be able rollback if needed.
         if (versionDistribution.isEmpty()) {
-            System.out.println("The distribution cannot be validated.");
+            logger.log(Level.WARNING, "The distribution cannot be validated.");
             return;
         }
 
@@ -338,6 +341,8 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             throw new CommandValidationException(String.format("The current distribution (%s) you are " +
                     "running does not match the requested upgrade distribution (%s)", versionDistribution, distribution));
         }
+
+        logger.log(Level.FINE, "Distribution validated as {0}", versionDistribution);
     }
 
     @Override
@@ -374,11 +379,19 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
         // Delete existing property file if present
         Path upgradeToolPropertiesPath = Paths.get(glassfishDir, "config", "upgrade-tool.properties");
-        try {
-            Files.deleteIfExists(upgradeToolPropertiesPath);
-        } catch (IOException ioException) {
-            throw new CommandValidationException("Encountered an error trying to existing delete " +
-                    "upgrade-tool.properties file:\n", ioException);
+        logger.log(Level.FINER, "Creating upgrade-tool.properties file: {0}", upgradeToolPropertiesPath.toString());
+
+        if (Files.exists(upgradeToolPropertiesPath)) {
+            try {
+                logger.log(Level.FINER, "Deleting pre-existing upgrade-tool.properties file: {0}",
+                        upgradeToolPropertiesPath.toString());
+                Files.delete(upgradeToolPropertiesPath);
+                logger.log(Level.FINER, "Deleted pre-existing upgrade-tool.properties file: {0}",
+                        upgradeToolPropertiesPath.toString());
+            } catch (IOException ioException) {
+                throw new CommandValidationException("Encountered an error trying to existing delete " +
+                        "upgrade-tool.properties file:\n", ioException);
+            }
         }
 
         // Create new property file and populate
@@ -387,11 +400,15 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             bufferedWriter.append(PAYARA_UPGRADE_DIRS_PROP + "=");
 
             // Add the move folders, separated by commas
-            bufferedWriter.append(String.join(",", folders));
+            String joinedFolders = String.join(",", folders);
+            logger.log(Level.FINEST, "Populating upgrade-tool.properties with move folders: {0}", joinedFolders);
+            bufferedWriter.append(joinedFolders);
         } catch (IOException ioException) {
             throw new CommandValidationException("Encountered an error trying to write upgrade-tool.properties file:\n",
                     ioException);
         }
+        logger.log(Level.FINER, "Finished creating upgrade-tool.properties file: {0}",
+                upgradeToolPropertiesPath.toString());
     }
 
     /**
@@ -411,11 +428,18 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
         // Delete existing property file if present
         Path upgradeToolBatPath = Paths.get(glassfishDir, "config", "upgrade-tool.bat");
-        try {
-            Files.deleteIfExists(upgradeToolBatPath);
-        } catch (IOException ioException) {
-            throw new CommandValidationException("Encountered an error trying to existing delete " +
-                    "upgrade-tool.bat file:\n", ioException);
+        logger.log(Level.FINER, "Creating upgrade-tool.bat file: {0}", upgradeToolBatPath.toString());
+        if (Files.exists(upgradeToolBatPath)) {
+            try {
+                logger.log(Level.FINER, "Deleting pre-existing upgrade-tool.bat file: {0}",
+                        upgradeToolBatPath.toString());
+                Files.delete(upgradeToolBatPath);
+                logger.log(Level.FINEST, "Deleted pre-existing upgrade-tool.bat file: {0}",
+                        upgradeToolBatPath.toString());
+            } catch (IOException ioException) {
+                throw new CommandValidationException("Encountered an error trying to existing delete " +
+                        "upgrade-tool.bat file:\n", ioException);
+            }
         }
 
         // Create new property file and populate
@@ -424,11 +448,14 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             bufferedWriter.append("SET " + PAYARA_UPGRADE_DIRS_PROP + "=");
 
             // Add the move folders, separated by commas
-            bufferedWriter.append(String.join(",", folders));
+            String joinedFolders = String.join(",", folders);
+            logger.log(Level.FINEST, "Populating upgrade-tool.bat with move folders: {0}", joinedFolders);
+            bufferedWriter.append(joinedFolders);
         } catch (IOException ioException) {
             throw new CommandValidationException("Encountered an error trying to write upgrade-tool.bat file:\n",
                     ioException);
         }
+        logger.log(Level.FINER, "Finished creating upgrade-tool.bat file: {0}", upgradeToolBatPath.toString());
     }
 
     @Override
@@ -440,41 +467,50 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         Path unzippedDirectory = null;
 
         // here the upgrade starts with non-restorable changes, display warning
-        LOGGER.log(Level.WARNING, "Do not interrupt the upgrade process, do not shutdown the server or computer.");
+        logger.log(Level.WARNING, "Do not interrupt the upgrade process, do not shutdown the server or computer.");
 
         // Download and/or unzip payara distribution, aborting upgrade if this fails
         try {
             Path tempFile = Files.createTempFile("payara", ".zip");
 
             if (useDownloadedFile != null) {
+                logger.log(Level.FINER, "Copying downloaded distribution {0} to temp file: {1}",
+                        new Object[]{useDownloadedFile.toString(), tempFile.toString()});
                 Files.copy(useDownloadedFile.toPath(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+                logger.log(Level.FINEST, "Copied downloaded distribution {0} to temp file: {1}",
+                        new Object[]{useDownloadedFile.toString(), tempFile.toString()});
             } else {
-                LOGGER.log(Level.INFO, "Downloading new Payara version...");
+                logger.log(Level.INFO, "Downloading new Payara version...");
+                logger.log(Level.FINE, "Downloading from {0}", url);
                 HttpURLConnection connection = getConnection(url);
                 connection.setRequestProperty("Authorization", authBytes);
 
                 int code = connection.getResponseCode();
                 if (code != 200) {
                     if (code == 404) {
-                        LOGGER.log(Level.SEVERE, "The version indicated is incorrect, please set correct version and try again");
+                        logger.log(Level.SEVERE, "The version indicated is incorrect, please set correct version and try again");
                         throw new CommandValidationException("Payara version not found");
                     } else {
-                        LOGGER.log(Level.SEVERE, "Error connecting to server: {0}", code);
+                        logger.log(Level.SEVERE, "Error connecting to server: {0}", code);
                         return ERROR;
                     }
                 }
 
+                logger.log(Level.FINER, "Copying downloaded distribution to temp file: {0}", tempFile);
                 Files.copy(connection.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+                logger.log(Level.FINEST, "Copied downloaded distribution to temp file: {0}", tempFile);
             }
 
             FileInputStream unzipFileStream = new FileInputStream(tempFile.toFile());
+            logger.log(Level.FINE, "Extracting zip file {0}", tempFile.toString());
             unzippedDirectory = extractZipFile(unzipFileStream);
+            logger.log(Level.FINEST, "Extracted zip file {0}", tempFile.toString());
         } catch (IOException | CommandException e) {
-            LOGGER.log(Level.SEVERE, String.format("Error preparing for upgrade, aborting upgrade: %s", e));
+            logger.log(Level.SEVERE, String.format("Error preparing for upgrade, aborting upgrade: %s", e));
             return ERROR;
         }
         if (unzippedDirectory == null) {
-            LOGGER.log(Level.SEVERE, "Error preparing for upgrade, aborting upgrade: could not extract archive");
+            logger.log(Level.SEVERE, "Error preparing for upgrade, aborting upgrade: could not extract archive");
             return ERROR;
         }
 
@@ -482,14 +518,14 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         try {
             backupDomains();
         } catch (CommandException ce) {
-            LOGGER.log(Level.SEVERE, "Error executing backup-domain command, aborting upgrade: {0}", ce.toString());
+            logger.log(Level.SEVERE, "Error executing backup-domain command, aborting upgrade: {0}", ce.toString());
             return ERROR;
         }
 
         try {
             cleanupExisting();
         } catch (IOException ioe) {
-            LOGGER.log(Level.SEVERE, "Error cleaning up previous upgrades, aborting upgrade: {0}", ioe.toString());
+            logger.log(Level.SEVERE, "Error cleaning up previous upgrades, aborting upgrade: {0}", ioe.toString());
             return ERROR;
         }
 
@@ -500,7 +536,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 fixPermissions();
             }
         } catch (IOException ex) {
-            LOGGER.log(Level.SEVERE, "Error upgrading Payara Server, rolling back upgrade: {0}", ex.toString());
+            logger.log(Level.SEVERE, "Error upgrading Payara Server, rolling back upgrade: {0}", ex.toString());
 
             try {
                 if (stage) {
@@ -509,7 +545,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     undoMoveFiles();
                 }
             } catch (IOException ex1) {
-                LOGGER.log(Level.WARNING, "Failed to restore previous state: {0}", ex.toString());
+                logger.log(Level.WARNING, "Failed to restore previous state: {0}", ex.toString());
             }
             return ERROR;
         }
@@ -522,7 +558,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 // IOException or ConfigurationException occurs when parsing the domain.xml, before any attempt to
                 // update the nodes. It gets thrown if the domain.xml couldn't be found, or if the domain.xml is
                 // somehow incorrect, which implies something has gone wrong - rollback
-                LOGGER.log(Level.SEVERE, "Error upgrading Payara Server nodes, rolling back: {0}", ex.toString());
+                logger.log(Level.SEVERE, "Error upgrading Payara Server nodes, rolling back: {0}", ex.toString());
                 try {
                     if (stage) {
                         deleteStagedInstall();
@@ -531,7 +567,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     }
                 } catch (IOException ex1) {
                     // Exit out here if we failed to restore, we don't want to push a broken install to the nodes
-                    LOGGER.log(Level.SEVERE, "Failed to restore previous state of local install", ex1.toString());
+                    logger.log(Level.SEVERE, "Failed to restore previous state of local install", ex1.toString());
                     return ERROR;
                 }
 
@@ -540,7 +576,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             } catch (CommandException ce) {
                 // CommandException gets thrown once all nodes have been attempted to be upgraded and if at
                 // least one upgrade hit an error. We don't want to roll back now since the failure might be valid
-                LOGGER.log(Level.WARNING, "Failed to upgrade all nodes: inspect the logs from this command for " +
+                logger.log(Level.WARNING, "Failed to upgrade all nodes: inspect the logs from this command for " +
                                 "the reasons. You can rollback the server upgrade and all of its nodes using the " +
                                 "rollback-server command, upgrade the node installs individually using the " +
                                 "upgrade-server command on each node, or attempt to upgrade them all again using the " +
@@ -551,7 +587,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         }
 
         if (stage) {
-            LOGGER.log(Level.INFO,
+            logger.log(Level.INFO,
                     "Upgrade successfully staged, please run the applyStagedUpgrade script to apply the upgrade. " +
                             "It can be found under payara5/glassfish/bin.");
         }
@@ -574,6 +610,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     private Path extractZipFile(InputStream remote) throws IOException {
         Path tempDirectory = Files.createTempDirectory("payara-new");
 
+        logger.log(Level.FINER, "Extracting zip file to temp directory {0}", tempDirectory.toString());
         try (ZipInputStream zipInput = new ZipInputStream(remote)) {
             ZipEntry entry = zipInput.getNextEntry();
             while (entry != null) {
@@ -593,24 +630,28 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 entry = zipInput.getNextEntry();
             }
         }
+        logger.log(Level.FINEST, "Extracted zip file to temp directory {0}", tempDirectory.toString());
         return tempDirectory;
     }
 
     private void backupDomains() throws CommandException {
-        LOGGER.log(Level.INFO, "Backing up domain configs");
+        logger.log(Level.INFO, "Backing up domain configs");
         File[] domaindirs = getDomainsDir().listFiles(File::isDirectory);
         for (File domaindir : domaindirs) {
             CLICommand backupDomainCommand = CLICommand.getCommand(habitat, "backup-domain");
             if (StringUtils.ok(domainDirParam)) {
+                logger.log(Level.FINE, "Executing command: {0}", "backup-domain --domaindir "
+                        + domainDirParam + " " + domaindir.getName());
                 backupDomainCommand.execute("backup-domain", "--domaindir", domainDirParam, domaindir.getName());
             } else {
+                logger.log(Level.FINE, "Executing command: {0}", "backup-domain " + domaindir.getName());
                 backupDomainCommand.execute("backup-domain", domaindir.getName());
             }
         }
     }
 
     private void cleanupExisting() throws IOException {
-        LOGGER.log(Level.FINE, "Deleting old server backup if present");
+        logger.log(Level.FINE, "Deleting old server backup if present");
         DeleteFileVisitor visitor = new DeleteFileVisitor();
         for (String folder : moveFolders) {
             Path folderPath = Paths.get(glassfishDir, folder + ".old");
@@ -618,28 +659,35 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             // Don't fail out if it doesn't exist, just keep going - we want to delete all we can
             if (folderPath.toFile().exists()) {
                 Files.walkFileTree(folderPath, visitor);
+            } else {
+                logger.log(Level.FINER, "No old install directory found for {0}, skipping", folderPath.toString());
             }
         }
-        LOGGER.log(Level.FINE, "Deleted old server backup");
+        logger.log(Level.FINE, "Deleted old server backup");
         deleteStagedInstall();
     }
 
     private void moveFiles(Path newVersion) throws IOException {
         if (!stage) {
-            LOGGER.log(Level.FINE, "Moving files to old");
+            logger.log(Level.FINE, "Moving files to old");
             for (String folder : moveFolders) {
                 try {
                     // Just attempt to move all folders - any exceptions aside from NoSuchFile on an MQ directory
                     // are unexpected and we should cancel out if we hit one
-                    Files.move(Paths.get(glassfishDir, folder), Paths.get(glassfishDir, folder + ".old"),
-                            StandardCopyOption.REPLACE_EXISTING);
+                    Path currentFile = Paths.get(glassfishDir, folder);
+                    Path oldFile = Paths.get(glassfishDir, folder + ".old");
+                    logger.log(Level.FINER, "Moving current install file {0} to old directory {1}",
+                            new Object[]{currentFile.toString(), oldFile.toString()});
+                    Files.move(currentFile, oldFile, StandardCopyOption.REPLACE_EXISTING);
+                    logger.log(Level.FINEST, "Moved current install file {0} to old directory {1}",
+                            new Object[]{currentFile.toString(), oldFile.toString()});
                 } catch (NoSuchFileException nsfe) {
                     // We can't nicely check if the "current" installation is a web distribution or not ("distribution"
                     // param is optional with "useDownloaded"), so just attempt to move all and specifically catch a
                     // NSFE for the MQ directory
                     if (nsfe.getMessage().contains(
                             "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
-                        LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                     } else {
                         throw nsfe;
@@ -647,13 +695,13 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 }
             }
         }
-        LOGGER.log(Level.FINE, "Moved files to old");
+        logger.log(Level.FINE, "Moved files to old");
 
         moveExtracted(newVersion);
     }
 
     private void moveExtracted(Path newVersion) throws IOException {
-        LOGGER.log(Level.FINE, "Copying extracted files");
+        logger.log(Level.FINE, "Copying extracted files");
 
         for (String folder : moveFolders) {
             Path sourcePath = newVersion.resolve("payara5" + File.separator + "glassfish" + File.separator + folder);
@@ -661,10 +709,14 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             if (stage) {
                 targetPath = Paths.get(targetPath + ".new");
             }
+            logger.log(Level.FINER, "Moving extracted file {0} to {1}",
+                    new Object[]{sourcePath.toString(), targetPath.toString()});
 
             if (Paths.get(glassfishDir, folder).toFile().isDirectory()) {
                 if (!targetPath.toFile().exists()) {
+                    logger.log(Level.FINER, "Target path {0} doesn't exist, creating it.", targetPath.toString());
                     Files.createDirectory(targetPath);
+                    logger.log(Level.FINEST, "Created target path {0}", targetPath.toString());
                 }
             }
 
@@ -674,48 +726,55 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 Files.walkFileTree(sourcePath, visitor);
             }
         }
-        LOGGER.log(Level.FINE, "Extracted files copied");
+        logger.log(Level.FINE, "Extracted files copied");
     }
 
     private void undoMoveFiles() throws IOException {
         // We don't know the state of the "current" or "old" installs, so we need to do this file by file with
         // a visitor that overwrites rather than doing it by folder with Files.move since Files.move would
         // require us to deal with DirectoryNotEmptyExceptions
-        LOGGER.log(Level.FINE, "Moving old back");
+        logger.log(Level.FINE, "Moving old back");
         for (String folder : moveFolders) {
             try {
                 Path movedToPath = Paths.get(glassfishDir, folder + ".old");
 
                 // Skip this folder if we don't appear to have moved it
                 if (!movedToPath.toFile().exists()) {
+                    logger.log(Level.FINEST, "Moved to path {0} doesn't exist, skipping", movedToPath.toString());
                     continue;
                 }
 
                 // Copy the files from the folder, overwriting any
                 Path movedFromPath = Paths.get(glassfishDir, folder);
                 CopyFileVisitor copyVisitor = new CopyFileVisitor(movedToPath, movedFromPath);
+                logger.log(Level.FINER, "Copying files from {0} to {1}",
+                        new Object[]{movedToPath.toString(), movedFromPath.toString()});
                 Files.walkFileTree(movedToPath, copyVisitor);
+                logger.log(Level.FINEST, "Copied files from {0} to {1}",
+                        new Object[]{movedToPath.toString(), movedFromPath.toString()});
 
                 // Clear out the leftover "old" install
                 DeleteFileVisitor deleteVisitor = new DeleteFileVisitor();
+                logger.log(Level.FINER, "Deleting files from {0}", movedToPath.toString());
                 Files.walkFileTree(movedToPath, deleteVisitor);
+                logger.log(Level.FINEST, "Deleted files from {0}", movedToPath.toString());
             } catch (NoSuchFileException nsfe) {
                 // Don't exit out on NoSuchFileExceptions, just keep going - any NoSuchFileException is likely
                 // just a case of the file not having been moved yet.
-                LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for directory {0} under assumption " +
+                logger.log(Level.FINE, "Ignoring NoSuchFileException for directory {0} under assumption " +
                         "it hasn't been moved yet. Continuing rollback...", folder + ".old");
             }
         }
-        LOGGER.log(Level.FINE, "Moved old back");
+        logger.log(Level.FINE, "Moved old back");
     }
 
     private void fixPermissions() throws IOException {
-        LOGGER.log(Level.FINE, "Fixing file permissions");
+        logger.log(Level.FINE, "Fixing file permissions");
         // Fix the permissions of any bin directories in moveFolders
         fixBinDirPermissions();
         // Fix the permissions of nadmin (since it's not in a bin directory)
         fixNadminPermissions();
-        LOGGER.log(Level.FINE, "File permissions fixed");
+        logger.log(Level.FINE, "File permissions fixed");
     }
 
     private void fixBinDirPermissions() throws IOException {
@@ -738,7 +797,13 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             }
 
             if (nadminPath.toFile().exists()) {
-                Files.setPosixFilePermissions(nadminPath, PosixFilePermissions.fromString("rwxr-xr-x"));
+                logger.log(Level.FINER, "Fixing file permissions for {0} to {1}",
+                        new Object[]{nadminPath.toString(), PERMISSIONS});
+                Files.setPosixFilePermissions(nadminPath, PosixFilePermissions.fromString(PERMISSIONS));
+                logger.log(Level.FINEST, "Fixed file permissions for {0} to {1}",
+                        new Object[]{nadminPath.toString(), PERMISSIONS});
+            } else {
+                logger.log(Level.FINER, "File {0} does not exist, skipping", nadminPath.toString());
             }
 
             Path nadminBatPath = Paths.get(glassfishDir, "lib", "nadmin.bat");
@@ -747,7 +812,13 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             }
 
             if (nadminBatPath.toFile().exists()) {
-                Files.setPosixFilePermissions(nadminBatPath, PosixFilePermissions.fromString("rwxr-xr-x"));
+                logger.log(Level.FINER, "Fixing file permissions for {0} to {1}",
+                        new Object[]{nadminBatPath.toString(), PERMISSIONS});
+                Files.setPosixFilePermissions(nadminBatPath, PosixFilePermissions.fromString(PERMISSIONS));
+                logger.log(Level.FINEST, "Fixed file permissions for {0} to {1}",
+                        new Object[]{nadminBatPath.toString(), PERMISSIONS});
+            } else {
+                logger.log(Level.FINER, "File {0} does not exist, skipping", nadminBatPath.toString());
             }
         }
     }
@@ -766,13 +837,20 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             // If we're not in a bin directory, skip
             if (file.getParent().getFileName().toString().equals("bin") ||
                     file.getParent().getFileName().toString().equals("bin.new")) {
-
                 if (!OS.isWindows()) {
-                    LOGGER.log(Level.FINER, "Fixing file permissions for " + file.getFileName());
-                    Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rwxr-xr-x"));
+                    logger.log(Level.FINER, "Fixing file permissions for {0} to {1}",
+                            new Object[]{file.toString(), PERMISSIONS});
+                    Files.setPosixFilePermissions(file, PosixFilePermissions.fromString(PERMISSIONS));
+                    logger.log(Level.FINEST, "Fixed file permissions for {0} to {1}",
+                            new Object[]{file.toString(), PERMISSIONS});
+                } else {
+                    logger.log(Level.FINER,
+                            "OS is Windows, skipping fixing file permissions for {0}", file.toString());
                 }
 
                 return FileVisitResult.CONTINUE;
+            } else {
+                logger.log(Level.FINER, "File {0} is not in a bin directory, skipping", file.getParent().toString());
             }
 
             return FileVisitResult.SKIP_SIBLINGS;
@@ -784,16 +862,18 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             // optional with "useDownloaded"), so specifically catch a NSFE for the MQ directory.
             if (exc instanceof NoSuchFileException && exc.getMessage().contains(
                     "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
-                LOGGER.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
+                logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                         "this is a payara-web distribution. Continuing fixing of permissions...");
                 return FileVisitResult.SKIP_SUBTREE;
             }
             // osgi-cache directory doesn't exist in a new Payara install so can be safely ignored
             if (exc instanceof NoSuchFileException && exc.getMessage().contains("osgi-cache")) {
+                logger.log(Level.FINE,
+                        "Ignoring NoSuchFileException for osgi-cache directory. Continuing fixing of permissions...");
                 return FileVisitResult.SKIP_SUBTREE;
             }
 
-            LOGGER.log(Level.SEVERE, "File could not visited: {0}", file.toString());
+            logger.log(Level.SEVERE, "File could not visited: {0}", file.toString());
             throw exc;
         }
 

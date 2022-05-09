@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright (c) 2021 Payara Foundation and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021-2022 Payara Foundation and/or its affiliates. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common Development
@@ -66,7 +66,7 @@ public class ReinstallNodesCommand extends BaseUpgradeCommand {
              * least one upgrade hit an error. Since we don't know if this was all nodes or just a subset,
              * pessimistically log a full error rather than a warning.
              */
-            LOGGER.log(Level.SEVERE, "Failed to reinstall all nodes: inspect the logs from this command for " +
+            logger.log(Level.SEVERE, "Failed to reinstall all nodes: inspect the logs from this command for " +
                             "the reasons. You can roll back or upgrade the node installs individually using the " +
                             "rollback-server or upgrade-server commands on each node respectively, or attempt to " +
                             "reinstall them again by re-running this command \n{0}",

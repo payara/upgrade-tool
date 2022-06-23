@@ -99,6 +99,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     // This will be converted to use Windows file separators if required during validate()
     private static final String[] CONSTANTMOVEFOLDERS = {"common",
             "config" + File.separator + "branding",
+            "config" + File.separator + "osgi.properties",
             "h2db",
             ".." + File.separator + "h2db",
             "legal",

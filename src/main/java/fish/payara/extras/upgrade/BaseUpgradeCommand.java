@@ -80,6 +80,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
+import static com.sun.enterprise.util.io.DomainDirs.getDefaultDomainsDir;
+
 /**
  * Base class containing shared methods and variables used by other upgrade/rollback commands.
  */
@@ -117,7 +119,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
 
     @Override
     protected void validate() throws CommandException {
-        // Perform usual validation; we don't want to skip it or alter it in anyway, we just want to add to it.
+        // Perform usual validation; we don't want to skip it, we just want to add to it. Requires modification of the initDomain method
         super.validate();
 
         // Set up the install dir variable
@@ -127,6 +129,28 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         // Gets all folders and files to be moved in the upgrade process, including osgi-cache directories
         moveFolders = Stream.concat(Arrays.stream(CONSTANTMOVEFOLDERS), Arrays.stream(getOsgiCacheDirectories())).toArray((String[]::new));
         logger.log(Level.FINEST, "moveFolders resolved as {0}", String.join(", ", moveFolders));
+    }
+
+    /**
+     * By default, initDomain will use the {@link LocalDomainCommand#getDomainName()} method, in the case of the upgrade tool,
+     * the domain name will never be set and therefore will default to domain1. In the case domain1 cannot be found (Ie. It's been deleted)
+     * {@link LocalDomainCommand#initDomain()} will fail with "Please specify a domain". This is correct for commands which require a specific domain
+     * to execute against, however the Upgrade Tool will upgrade all domains anyway, so overriding this and forcing the domain name to be the first
+     * domain that exists is suitable to overcome this restriction.
+     */
+    @Override
+    protected void initDomain() throws CommandException {
+        try {
+             File defaultDomainsDir = getDefaultDomainsDir();
+             //defaultDomainsDir can't be null here as getDefaultDomainsDir() will throw an IOException in that scenario
+             if (defaultDomainsDir.listFiles().length == 0) {
+                 throw new CommandException("There are no domains in " + defaultDomainsDir);
+             }
+             setDomainName(defaultDomainsDir.listFiles()[0].getName());
+        } catch (IOException ioException) {
+            throw new CommandException(ioException);
+        }
+        super.initDomain();
     }
 
     private String[] getOsgiCacheDirectories() {

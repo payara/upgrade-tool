@@ -140,17 +140,44 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
      */
     @Override
     protected void initDomain() throws CommandException {
-        try {
-             File defaultDomainsDir = getDefaultDomainsDir();
-             //defaultDomainsDir can't be null here as getDefaultDomainsDir() will throw an IOException in that scenario
-             if (defaultDomainsDir.listFiles().length == 0) {
-                 throw new CommandException("There are no domains in " + defaultDomainsDir);
-             }
-             setDomainName(defaultDomainsDir.listFiles()[0].getName());
-        } catch (IOException ioException) {
-            throw new CommandException(ioException);
+        //If there is no domainDirParam, look in the default domains directory
+        if (domainDirParam == null) {
+            try {
+                File defaultDomainsDir = getDefaultDomainsDir();
+                setDomainName(getDefaultOrFirstDomainName(defaultDomainsDir));
+            } catch (IOException ioException) {
+                throw new CommandException(ioException);
+            }
+        }
+        //The domainDirParam is present, check for validity then use the first domain in that directory
+        else if (ok(domainDirParam)) {
+            setDomainName(getDefaultOrFirstDomainName(new File(domainDirParam)));
         }
         super.initDomain();
+    }
+
+    /**
+     * Based on the domainsDir, whether it be the default or from a parameter, validate it contains at least 1 valid domain
+     * If it does, check for any folders which are domain1, this is to maintain the previous behaviour. If there was no domain1
+     * use the first domain name from the directory.
+     */
+    private String getDefaultOrFirstDomainName(File domainsDir) throws CommandException {
+        //Gather all the directories from the domainsDir which are valid (Have a config and domain.xml)
+        File[] domainDirectories = domainsDir.listFiles((f) -> {
+            File config = new File(f, "config");
+            File dxml = new File(config, "domain.xml");
+            return f.isDirectory() && config.isDirectory() && dxml.isFile();
+        });
+        //If there are no valid domain directories found, throw an error
+        if (domainDirectories == null || domainDirectories.length == 0) {
+            throw new CommandException(String.format("The domain directory %s contains no valid domains", domainsDir));
+        }
+        //For the valid domain directories, try and find domain1 to maintain default behaviour
+        if (Arrays.stream(domainDirectories).anyMatch(dirName -> dirName.getName().equals("domain1"))) {
+            return "domain1";
+        }
+        //If domain1 wasn't found, return the name of the first directory in the domainsDir
+        return domainDirectories[0].getName();
     }
 
     private String[] getOsgiCacheDirectories() {

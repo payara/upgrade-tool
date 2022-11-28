@@ -72,6 +72,14 @@
         </repository>
     </repositories>
 
+    <!-- Used for deploying Upgrade Tool to Nexus -->
+    <distributionManagement>
+        <repository>
+            <id>payara-enterprise</id>
+            <url>https://nexus.payara.fish/repository/payara-enterprise/</url>
+        </repository>
+    </distributionManagement>
+
     <dependencies>
         <dependency>
             <groupId>fish.payara.server.internal.admin</groupId>

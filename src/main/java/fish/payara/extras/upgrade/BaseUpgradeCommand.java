@@ -80,6 +80,8 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
+import static com.sun.enterprise.util.io.DomainDirs.getDefaultDomainsDir;
+
 /**
  * Base class containing shared methods and variables used by other upgrade/rollback commands.
  */
@@ -117,7 +119,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
 
     @Override
     protected void validate() throws CommandException {
-        // Perform usual validation; we don't want to skip it or alter it in anyway, we just want to add to it.
+        // Perform usual validation; we don't want to skip it, we just want to add to it. Requires modification of the initDomain method
         super.validate();
 
         // Set up the install dir variable
@@ -127,6 +129,55 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         // Gets all folders and files to be moved in the upgrade process, including osgi-cache directories
         moveFolders = Stream.concat(Arrays.stream(CONSTANTMOVEFOLDERS), Arrays.stream(getOsgiCacheDirectories())).toArray((String[]::new));
         logger.log(Level.FINEST, "moveFolders resolved as {0}", String.join(", ", moveFolders));
+    }
+
+    /**
+     * By default, initDomain will use the {@link LocalDomainCommand#getDomainName()} method, in the case of the upgrade tool,
+     * the domain name will never be set and therefore will default to domain1. In the case domain1 cannot be found (Ie. It's been deleted)
+     * {@link LocalDomainCommand#initDomain()} will fail with "Please specify a domain". This is correct for commands which require a specific domain
+     * to execute against, however the Upgrade Tool will upgrade all domains anyway, so overriding this and forcing the domain name to be the first
+     * domain that exists is suitable to overcome this restriction.
+     */
+    @Override
+    protected void initDomain() throws CommandException {
+        //If there is no domainDirParam, look in the default domains directory
+        if (domainDirParam == null) {
+            try {
+                File defaultDomainsDir = getDefaultDomainsDir();
+                setDomainName(getDefaultOrFirstDomainName(defaultDomainsDir));
+            } catch (IOException ioException) {
+                throw new CommandException(ioException);
+            }
+        }
+        //The domainDirParam is present, check for validity then use the first domain in that directory
+        else if (ok(domainDirParam)) {
+            setDomainName(getDefaultOrFirstDomainName(new File(domainDirParam)));
+        }
+        super.initDomain();
+    }
+
+    /**
+     * Based on the domainsDir, whether it be the default or from a parameter, validate it contains at least 1 valid domain
+     * If it does, check for any folders which are domain1, this is to maintain the previous behaviour. If there was no domain1
+     * use the first domain name from the directory.
+     */
+    private String getDefaultOrFirstDomainName(File domainsDir) throws CommandException {
+        //Gather all the directories from the domainsDir which are valid (Have a config and domain.xml)
+        File[] domainDirectories = domainsDir.listFiles((f) -> {
+            File config = new File(f, "config");
+            File dxml = new File(config, "domain.xml");
+            return f.isDirectory() && config.isDirectory() && dxml.isFile();
+        });
+        //If there are no valid domain directories found, throw an error
+        if (domainDirectories == null || domainDirectories.length == 0) {
+            throw new CommandException(String.format("The domain directory %s contains no valid domains", domainsDir));
+        }
+        //For the valid domain directories, try and find domain1 to maintain default behaviour
+        if (Arrays.stream(domainDirectories).anyMatch(dirName -> dirName.getName().equals("domain1"))) {
+            return "domain1";
+        }
+        //If domain1 wasn't found, return the name of the first directory in the domainsDir
+        return domainDirectories[0].getName();
     }
 
     private String[] getOsgiCacheDirectories() {

@@ -673,7 +673,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         if (stage) {
             logger.log(Level.INFO,
                     "Upgrade successfully staged, please run the applyStagedUpgrade script to apply the upgrade. " +
-                            "It can be found under payara5/glassfish/bin.");
+                            "It can be found under payara" + getCurrentMajorVersion() + "/glassfish/bin.");
         }
 
         return SUCCESS;
@@ -873,7 +873,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     }
 
     private void fixNadminPermissions() throws IOException {
-        // Check that we're actually upgrading the payara5/glassfish/lib directory before messing with permissions
+        // Check that we're actually upgrading the payara(5/6)/glassfish/lib directory before messing with permissions
         if (Arrays.stream(moveFolders).anyMatch(folder -> folder.equals("lib"))) {
             Path nadminPath = Paths.get(glassfishDir, "lib", "nadmin");
             if (stage) {

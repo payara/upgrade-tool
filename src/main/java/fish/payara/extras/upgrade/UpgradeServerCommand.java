@@ -606,9 +606,15 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             try {
                 //Get the version from the downloaded file, validate it then set the version option.
                 options.add(VERSION_PARAM_NAME, getPayaraVersionFromDownload(unzippedDirectory));
-                preventVersionDowngrade();
             } catch (CommandException commandException) {
                 logger.log(Level.SEVERE, "Error getting version from provided zip, aborting upgrade: {0}", commandException.toString());
+                return ERROR;
+            }
+
+            try {
+                preventVersionDowngrade();
+            } catch (CommandException commandException) {
+                logger.log(Level.SEVERE, commandException.toString());
                 return ERROR;
             }
 

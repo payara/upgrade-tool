@@ -225,6 +225,16 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     throw new CommandValidationException(message);
                 }
             } else {
+                //To provide a helpful error, check if the version was likely a community version
+                Pattern communityPattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{4})\\.([0-9]{1,2})(?!\\W\\w+)");
+                Matcher communityMatcher = communityPattern.matcher(selectedVersion);
+                if (communityMatcher.find()) {
+                    String message = String.format("%s is a Payara Community version. You can only upgrade to a Payara Enterprise version",
+                            selectedVersion);
+                    throw new CommandValidationException(message);
+                }
+
+                //If it wasn't a community version it's likely random text
                 String message = String.format("Invalid selected version %s, please verify and try again",
                         selectedVersion);
                 throw new CommandValidationException(message);

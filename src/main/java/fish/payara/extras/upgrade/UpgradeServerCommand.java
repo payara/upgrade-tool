@@ -249,7 +249,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     /**
      * Method to get the Payara version being upgraded to Major Version
      *
-     * @return String
+     * @return Major version of the Payara distribution being upgraded to as a String
      */
     protected String getUpgradeMajorVersion() {
         //This is a list but only ever stores one value. Split on the . and get the Major version
@@ -259,7 +259,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     /**
      * Method to get the Payara version being upgraded to Minor Version
      *
-     * @return String
+     * @return Minor version of the Payara distribution being upgraded to as a String
      */
     protected String getUpgradeMinorVersion() {
         //This is a list but only ever stores one value. Split on the . and get the Minor version
@@ -269,7 +269,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     /**
      * Method to get the Payara version being upgraded to Update Version
      *
-     * @return String
+     * @return Update version of the Payara distribution being upgraded to as a String
      */
     protected String getUpgradeUpdateVersion() {
         //This is a list but only ever stores one value. Split on the . and get the Update version
@@ -281,13 +281,24 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
      * is unaware of the version being upgraded to. This will read the `glassfish-version.properties` file to get the
      * version of Payara.
      *
-     * @param extractedDownloadPath Path to the unzipped download file.
+     * @param extractedDownloadPath Path to the unzipped directory where the new version is stored.
      * @return A string version number eg. 6.0.0
-     * @throws CommandValidationException
+     * @throws CommandValidationException If the glassfish-version.properties file cannot be found, read or is incorrect
      */
-    private String getVersionFromDownloadedFile(Path extractedDownloadPath) throws CommandValidationException {
-        //The directory should only the payaraX folder. The exact name is unknown as it's the major version
-        String payaraDirectoryName = extractedDownloadPath.toFile().listFiles()[0].getName();
+    private String getPayaraVersionFromDownload(Path extractedDownloadPath) throws CommandValidationException {
+        //The directory should contain the payaraX folder. The exact name is unknown as it's the major version. Get the name of that folder
+        String payaraDirectoryName;
+        try {
+            //Check the zip only contains one file, and it's named payaraX where X is a number eg. payara6
+            File[] rootDirectoryFiles = extractedDownloadPath.toFile().listFiles();
+            if (rootDirectoryFiles == null || rootDirectoryFiles.length != 1 || !rootDirectoryFiles[0].getName().matches("payara\\d+")) {
+                throw new CommandValidationException("The Payara zip provided has been modified. Please use an unmodified distribution");
+            }
+            payaraDirectoryName = rootDirectoryFiles[0].getName();
+        } catch (IndexOutOfBoundsException e) {
+            throw new CommandValidationException(getOption(USE_DOWNLOADED_PARAM_NAME) + " is empty.");
+        }
+
         //Get the path to the glassfish-version.properties file
         Path glassfishVersionFile = Paths.get(extractedDownloadPath + File.separator + payaraDirectoryName +
                 File.separator + "glassfish" + File.separator + "config" + File.separator + "branding" + File.separator + "glassfish-version.properties");
@@ -308,6 +319,10 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     })
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
+
+            if (versionComponents.size() != 3) {
+                throw new CommandValidationException("glassfish-version.properties file does not contain a valid Payara version.");
+            }
             return versionComponents.get(0) + "." + versionComponents.get(1) + "." + versionComponents.get(2);
         } catch (IOException ioException) {
             throw new CommandValidationException("Unable to find glassfish-version.properties file.");
@@ -590,9 +605,10 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         if (useDownloadedFile != null) {
             try {
                 //Get the version from the downloaded file, validate it then set the version option.
-                options.add(VERSION_PARAM_NAME, getVersionFromDownloadedFile(unzippedDirectory));
+                options.add(VERSION_PARAM_NAME, getPayaraVersionFromDownload(unzippedDirectory));
                 preventVersionDowngrade();
             } catch (CommandException commandException) {
+                logger.log(Level.SEVERE, "Error getting version from provided zip, aborting upgrade: {0}", commandException.toString());
                 return ERROR;
             }
 

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright (c) 2020-2022 Payara Foundation and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020-2023 Payara Foundation and/or its affiliates. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common Development
@@ -44,6 +44,8 @@ import com.sun.enterprise.admin.cli.CLICommand;
 import com.sun.enterprise.universal.i18n.LocalStringsImpl;
 import com.sun.enterprise.util.OS;
 import com.sun.enterprise.util.StringUtils;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.glassfish.api.ExecutionContext;
 import org.glassfish.api.Param;
 import org.glassfish.api.ParamDefaultCalculator;
@@ -242,6 +244,91 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
      */
     protected List<String> getVersion() {
         return options.get(VERSION_PARAM_NAME);
+    }
+
+    /**
+     * Method to get the Payara version being upgraded to Major Version
+     *
+     * @return Major version of the Payara distribution being upgraded to as a String
+     */
+    protected String getUpgradeMajorVersion() {
+        //This is a list but only ever stores one value. Split on the . and get the Major version
+        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[0];
+    }
+
+    /**
+     * Method to get the Payara version being upgraded to Minor Version
+     *
+     * @return Minor version of the Payara distribution being upgraded to as a String
+     */
+    protected String getUpgradeMinorVersion() {
+        //This is a list but only ever stores one value. Split on the . and get the Minor version
+        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[1];
+    }
+
+    /**
+     * Method to get the Payara version being upgraded to Update Version
+     *
+     * @return Update version of the Payara distribution being upgraded to as a String
+     */
+    protected String getUpgradeUpdateVersion() {
+        //This is a list but only ever stores one value. Split on the . and get the Update version
+        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[2];
+    }
+
+    /**
+     * A method to get the Payara Version from a downloaded file. When --usedownloaded is specified, the upgrade tool
+     * is unaware of the version being upgraded to. This will read the `glassfish-version.properties` file to get the
+     * version of Payara.
+     *
+     * @param extractedDownloadPath Path to the unzipped directory where the new version is stored.
+     * @return A string version number eg. 6.0.0
+     * @throws CommandValidationException If the glassfish-version.properties file cannot be found, read or is incorrect
+     */
+    private String getPayaraVersionFromDownload(Path extractedDownloadPath) throws CommandValidationException {
+        //The directory should contain the payaraX folder. The exact name is unknown as it's the major version. Get the name of that folder
+        String payaraDirectoryName;
+        try {
+            //Check the zip only contains one file, and it's named payaraX where X is a number eg. payara6
+            File[] rootDirectoryFiles = extractedDownloadPath.toFile().listFiles();
+            if (rootDirectoryFiles == null || rootDirectoryFiles.length != 1 || !rootDirectoryFiles[0].getName().matches("payara\\d+")) {
+                throw new CommandValidationException("The Payara zip provided has been modified. Please use an unmodified distribution");
+            }
+            payaraDirectoryName = rootDirectoryFiles[0].getName();
+        } catch (IndexOutOfBoundsException e) {
+            throw new CommandValidationException(getOption(USE_DOWNLOADED_PARAM_NAME) + " is empty.");
+        }
+
+        //Get the path to the glassfish-version.properties file
+        Path glassfishVersionFile = Paths.get(extractedDownloadPath + File.separator + payaraDirectoryName +
+                File.separator + "glassfish" + File.separator + "config" + File.separator + "branding" + File.separator + "glassfish-version.properties");
+
+        //Read the glassfish-version.properties file to extract the version components
+        List<String> versionComponents;
+        try (Stream<String> glassfishVersionPropertiesFileStream = Files.lines(glassfishVersionFile)) {
+            //Go through each line of the file, find anything that matches the pattern, extract the numbers and add them to a list
+            Pattern pattern = Pattern.compile(".*_version=([0-9]+)");
+            versionComponents = glassfishVersionPropertiesFileStream
+                    .map(line -> {
+                        Matcher matcher = pattern.matcher(line);
+                        if (matcher.find()) {
+                            return matcher.group(1);
+                        } else {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            if (versionComponents.size() != 3) {
+                throw new CommandValidationException("glassfish-version.properties file does not contain a valid Payara version.");
+            }
+            return versionComponents.get(0) + "." + versionComponents.get(1) + "." + versionComponents.get(2);
+        } catch (IOException ioException) {
+            throw new CommandValidationException("Unable to find glassfish-version.properties file.");
+        } catch (IndexOutOfBoundsException | NullPointerException e) {
+            throw new CommandValidationException("Unable to get Payara version from glassfish-version.properties file.");
+        }
     }
 
     /**
@@ -514,6 +601,25 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             return ERROR;
         }
 
+        //If a downloaded file is used the upgrade version isn't known and can only be determined after the download was unzipped.
+        if (useDownloadedFile != null) {
+            try {
+                //Get the version from the downloaded file, validate it then set the version option.
+                options.add(VERSION_PARAM_NAME, getPayaraVersionFromDownload(unzippedDirectory));
+            } catch (CommandException commandException) {
+                logger.log(Level.SEVERE, "Error getting version from provided zip, aborting upgrade: {0}", commandException.toString());
+                return ERROR;
+            }
+
+            try {
+                preventVersionDowngrade();
+            } catch (CommandException commandException) {
+                logger.log(Level.SEVERE, commandException.toString());
+                return ERROR;
+            }
+
+        }
+
         // Attempt to backup domains, exiting out if it fails
         try {
             backupDomains();
@@ -589,7 +695,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         if (stage) {
             logger.log(Level.INFO,
                     "Upgrade successfully staged, please run the applyStagedUpgrade script to apply the upgrade. " +
-                            "It can be found under payara5/glassfish/bin.");
+                            "It can be found under payara" + getCurrentMajorVersion() + "/glassfish/bin.");
         }
 
         return SUCCESS;
@@ -704,7 +810,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         logger.log(Level.FINE, "Copying extracted files");
 
         for (String folder : moveFolders) {
-            Path sourcePath = newVersion.resolve("payara5" + File.separator + "glassfish" + File.separator + folder);
+            Path sourcePath = newVersion.resolve("payara" + getUpgradeMajorVersion() + File.separator + "glassfish" + File.separator + folder);
             Path targetPath = Paths.get(glassfishDir, folder);
             if (stage) {
                 targetPath = Paths.get(targetPath + ".new");
@@ -789,7 +895,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     }
 
     private void fixNadminPermissions() throws IOException {
-        // Check that we're actually upgrading the payara5/glassfish/lib directory before messing with permissions
+        // Check that we're actually upgrading the payara(5/6)/glassfish/lib directory before messing with permissions
         if (Arrays.stream(moveFolders).anyMatch(folder -> folder.equals("lib"))) {
             Path nadminPath = Paths.get(glassfishDir, "lib", "nadmin");
             if (stage) {

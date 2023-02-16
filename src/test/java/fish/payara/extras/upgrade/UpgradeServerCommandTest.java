@@ -172,7 +172,7 @@ public class UpgradeServerCommandTest extends TestCase {
     }
 
     @Test
-    public void testVersionUpgrade() {
+    public void testPayara5EnterpriseToPayara6Enterprise() {
         List<String> selectedVersionList = new ArrayList<>();
         selectedVersionList.add("6.1.0");
 
@@ -191,6 +191,58 @@ public class UpgradeServerCommandTest extends TestCase {
         verify(upgradeServerCommand, times(1)).getCurrentMinorVersion();
         verify(upgradeServerCommand, times(1)).getCurrentMinorVersion();
 
+    }
+
+    @Test
+    public void testPayara5EnterpriseToPayara6Community() {
+        List<String> selectedVersionList = new ArrayList<>();
+        selectedVersionList.add("6.2023.2");
+
+        doReturn(selectedVersionList).when(upgradeServerCommand).getVersion();
+
+        try {
+            upgradeServerCommand.preventVersionDowngrade();
+        } catch (CommandValidationException e) {
+            assertTrue(e.getMessage().contains("6.2023.2 is a Payara Community version. You can only upgrade to a Payara Enterprise version"));
+            verify(upgradeServerCommand, times(1)).getVersion();
+        }
+    }
+
+    @Test
+    public void testPayara6EnterpriseToPayara6Community() {
+        List<String> selectedVersionList = new ArrayList<>();
+        selectedVersionList.add("6.2023.1");
+
+        doReturn(selectedVersionList).when(upgradeServerCommand).getVersion();
+
+        try {
+            upgradeServerCommand.preventVersionDowngrade();
+        } catch (CommandValidationException e) {
+            assertTrue(e.getMessage().contains("6.2023.1 is a Payara Community version. You can only upgrade to a Payara Enterprise version"));
+            verify(upgradeServerCommand, times(1)).getVersion();
+        }
+    }
+
+    @Test
+    public void testPayara6EnterpriseToPayara6Enterprise() {
+        List<String> selectedVersionList = new ArrayList<>();
+        selectedVersionList.add("6.1.0");
+
+        doReturn(selectedVersionList).when(upgradeServerCommand).getVersion();
+        doReturn("6").when(upgradeServerCommand).getCurrentMajorVersion();
+        doReturn("0").when(upgradeServerCommand).getCurrentMinorVersion();
+        doReturn("0").when(upgradeServerCommand).getCurrentUpdatedVersion();
+
+        try {
+            upgradeServerCommand.preventVersionDowngrade();
+        } catch (CommandValidationException e) {
+            Assert.fail("Version validation failed incorrectly. " + e.getMessage());
+        }
+
+        verify(upgradeServerCommand, times(1)).getVersion();
+        verify(upgradeServerCommand, times(1)).getCurrentMajorVersion();
+        verify(upgradeServerCommand, times(1)).getCurrentMinorVersion();
+        verify(upgradeServerCommand, times(1)).getCurrentMinorVersion();
     }
 
     @Test

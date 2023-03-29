@@ -341,50 +341,50 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
      */
     protected void validateVersions() throws CommandValidationException {
         List<String> versionList = getVersion();
-        if (!versionList.isEmpty()) {
-            String selectedVersion = versionList.get(0).trim();
-            Pattern pattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{1,2})\\.([0-9]{1,2})(?!\\W\\w+)");
-            Matcher matcher = pattern.matcher(selectedVersion);
-            if (matcher.find()) {
-                if (matcher.groupCount() != 3) {
-                    String message = String.format("Invalid selected version %s, please verify and try again",
-                            selectedVersion);
-                    throw new CommandValidationException(message);
-                }
+        if (versionList.isEmpty()) {
+            String message = "Empty selected version, please verify and try again";
+            throw new CommandValidationException(message);
+        }
 
-                int majorSelectedVersion = Integer.parseInt(matcher.group(1).trim());
-                int majorCurrentVersion = Integer.parseInt(getCurrentMajorVersion());
-
-                if (majorSelectedVersion == 6) {
-                    isPayara6Upgrade = true;
-                }
-
-                if (majorSelectedVersion <= majorCurrentVersion) {
-                    int minorSelectedVersion = Integer.parseInt(matcher.group(2).trim());
-                    int updateSelectedVersion = Integer.parseInt(matcher.group(3).trim());
-                    int minorCurrentVersion = Integer.parseInt(getCurrentMinorVersion());
-                    int updatedCurrentVersion = Integer.parseInt(getCurrentUpdatedVersion());
-
-                    preventVersionDowngrade(selectedVersion, majorSelectedVersion, majorCurrentVersion,
-                            minorSelectedVersion, minorCurrentVersion, updateSelectedVersion, updatedCurrentVersion);
-                }
-            } else {
-                //To provide a helpful error, check if the version was likely a community version
-                Pattern communityPattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{4})\\.([0-9]{1,2})(?!\\W\\w+)");
-                Matcher communityMatcher = communityPattern.matcher(selectedVersion);
-                if (communityMatcher.find()) {
-                    String message = String.format("%s is a Payara Community version. You can only upgrade to a Payara Enterprise version",
-                            selectedVersion);
-                    throw new CommandValidationException(message);
-                }
-
-                //If it wasn't a community version it's likely random text
+        String selectedVersion = versionList.get(0).trim();
+        Pattern pattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{1,2})\\.([0-9]{1,2})(?!\\W\\w+)");
+        Matcher matcher = pattern.matcher(selectedVersion);
+        if (matcher.find()) {
+            if (matcher.groupCount() != 3) {
                 String message = String.format("Invalid selected version %s, please verify and try again",
                         selectedVersion);
                 throw new CommandValidationException(message);
             }
+
+            int majorSelectedVersion = Integer.parseInt(matcher.group(1).trim());
+            int majorCurrentVersion = Integer.parseInt(getCurrentMajorVersion());
+
+            if (majorSelectedVersion == 6) {
+                isPayara6Upgrade = true;
+            }
+
+            if (majorSelectedVersion <= majorCurrentVersion) {
+                int minorSelectedVersion = Integer.parseInt(matcher.group(2).trim());
+                int updateSelectedVersion = Integer.parseInt(matcher.group(3).trim());
+                int minorCurrentVersion = Integer.parseInt(getCurrentMinorVersion());
+                int updatedCurrentVersion = Integer.parseInt(getCurrentUpdatedVersion());
+
+                preventVersionDowngrade(selectedVersion, majorSelectedVersion, majorCurrentVersion,
+                        minorSelectedVersion, minorCurrentVersion, updateSelectedVersion, updatedCurrentVersion);
+            }
         } else {
-            String message = "Empty selected version, please verify and try again";
+            //To provide a helpful error, check if the version was likely a community version
+            Pattern communityPattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{4})\\.([0-9]{1,2})(?!\\W\\w+)");
+            Matcher communityMatcher = communityPattern.matcher(selectedVersion);
+            if (communityMatcher.find()) {
+                String message = String.format("%s is a Payara Community version. You can only upgrade to a Payara Enterprise version",
+                        selectedVersion);
+                throw new CommandValidationException(message);
+            }
+
+            //If it wasn't a community version it's likely random text
+            String message = String.format("Invalid selected version %s, please verify and try again",
+                    selectedVersion);
             throw new CommandValidationException(message);
         }
     }

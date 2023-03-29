@@ -121,7 +121,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
     private static final String PERMISSIONS = "rwxr-xr-x";
 
-    private boolean isMajorVersionUpgrade = false;
+    private boolean isPayara6Upgrade = false;
 
     @Override
     protected void prevalidate() throws CommandException {
@@ -355,9 +355,11 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 int majorSelectedVersion = Integer.parseInt(matcher.group(1).trim());
                 int majorCurrentVersion = Integer.parseInt(getCurrentMajorVersion());
 
-                if (majorSelectedVersion > majorCurrentVersion) {
-                    isMajorVersionUpgrade = true;
-                } else {
+                if (majorSelectedVersion == 6) {
+                    isPayara6Upgrade = true;
+                }
+
+                if (majorSelectedVersion <= majorCurrentVersion) {
                     int minorSelectedVersion = Integer.parseInt(matcher.group(2).trim());
                     int updateSelectedVersion = Integer.parseInt(matcher.group(3).trim());
                     int minorCurrentVersion = Integer.parseInt(getCurrentMinorVersion());
@@ -848,7 +850,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
             // Check that the path actually exists - some folders may have moved or be different between versions
             // For example glassfish/h2db exists for Payara 5, but doesn't for Payara 6
-            if (isMajorVersionUpgrade && !Files.exists(sourcePath)) {
+            if (isPayara6Upgrade && !Files.exists(sourcePath)) {
                 logger.log(Level.FINER, "Source path {0} doesn't exist, skipping...", sourcePath.toString());
                 continue;
             }
@@ -1021,7 +1023,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 return FileVisitResult.SKIP_SUBTREE;
             }
             // glassfish/h2db directory doesn't exist in a Payara 6 install so can be safely ignored
-            if (isMajorVersionUpgrade && exc instanceof NoSuchFileException && exc.getMessage().contains("glassfish/h2db")) {
+            if (isPayara6Upgrade && exc instanceof NoSuchFileException && exc.getMessage().contains("glassfish/h2db")) {
                 logger.log(Level.FINE,
                         "Ignoring NoSuchFileException for glassfish/h2db directory. Continuing fixing of permissions...");
                 return FileVisitResult.SKIP_SUBTREE;

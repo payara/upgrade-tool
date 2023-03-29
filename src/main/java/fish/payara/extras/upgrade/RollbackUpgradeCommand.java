@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright (c) 2020-2022 Payara Foundation and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020-2023 Payara Foundation and/or its affiliates. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common Development
@@ -113,14 +113,24 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
                             "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
+                        continue;
+                    }
+
                     // osgi-cache directory is created when the domain is started, if it was never started the
                     // directory will not exist so it's safe to ignore the NSFE
-                    } if (nsfe.getMessage().contains("osgi-cache")) {
+                    if (nsfe.getMessage().contains("osgi-cache")) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for osgi-cache directory under the " +
                                 "assumption the upgraded domain was never started. Continuing to move files...");
-                    } else {
-                        throw nsfe;
+                        continue;
                     }
+
+                    if (nsfe.getMessage().contains("glassfish/h2db")) {
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for glassfish/h2db directory under the " +
+                                "assumption this is a Payara 6 installation. Continuing to move files...");
+                        continue;
+                    }
+
+                    throw nsfe;
                 }
             }
             logger.log(Level.FINE, "Moved current install into a staged rollback directory");
@@ -157,15 +167,24 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
                             "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
+                        continue;
                     }
+
                     // osgi-cache directory is created when the domain is started, if it was never started before the
                     // upgrade the directory will not exist so it's safe to ignore the NSFE
                     if (nsfe.getMessage().contains("osgi-cache")) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for osgi-cache directory under the " +
                             "assumption the upgraded domain was never started. Continuing to move files...");
-                    } else {
-                        throw nsfe;
+                        continue;
                     }
+
+                    if (nsfe.getMessage().contains("glassfish/h2db")) {
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for glassfish/h2db directory under the " +
+                                "assumption this is a Payara 6 installation. Continuing to move files...");
+                        continue;
+                    }
+
+                    throw nsfe;
                 }
             }
         } catch (IOException ioe) {

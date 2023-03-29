@@ -121,13 +121,6 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
     private static final String PERMISSIONS = "rwxr-xr-x";
 
-    private int majorSelectedVersion;
-    private int minorSelectedVersion;
-    private int updateSelectedVersion;
-    private int majorCurrentVersion;
-    private int minorCurrentVersion;
-    private int updatedCurrentVersion;
-
     private boolean isMajorVersionUpgrade = false;
 
     @Override
@@ -353,23 +346,25 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             Pattern pattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{1,2})\\.([0-9]{1,2})(?!\\W\\w+)");
             Matcher matcher = pattern.matcher(selectedVersion);
             if (matcher.find()) {
-                if (matcher.groupCount() == 3) {
-                    majorSelectedVersion = Integer.parseInt(matcher.group(1).trim());
-                    minorSelectedVersion = Integer.parseInt(matcher.group(2).trim());
-                    updateSelectedVersion = Integer.parseInt(matcher.group(3).trim());
-                    majorCurrentVersion = Integer.parseInt(getCurrentMajorVersion());
-                    minorCurrentVersion = Integer.parseInt(getCurrentMinorVersion());
-                    updatedCurrentVersion = Integer.parseInt(getCurrentUpdatedVersion());
-                } else {
+                if (matcher.groupCount() != 3) {
                     String message = String.format("Invalid selected version %s, please verify and try again",
                             selectedVersion);
                     throw new CommandValidationException(message);
                 }
 
+                int majorSelectedVersion = Integer.parseInt(matcher.group(1).trim());
+                int majorCurrentVersion = Integer.parseInt(getCurrentMajorVersion());
+
                 if (majorSelectedVersion > majorCurrentVersion) {
                     isMajorVersionUpgrade = true;
                 } else {
-                    preventVersionDowngrade(selectedVersion);
+                    int minorSelectedVersion = Integer.parseInt(matcher.group(2).trim());
+                    int updateSelectedVersion = Integer.parseInt(matcher.group(3).trim());
+                    int minorCurrentVersion = Integer.parseInt(getCurrentMinorVersion());
+                    int updatedCurrentVersion = Integer.parseInt(getCurrentUpdatedVersion());
+
+                    preventVersionDowngrade(selectedVersion, majorSelectedVersion, majorCurrentVersion,
+                            minorSelectedVersion, minorCurrentVersion, updateSelectedVersion, updatedCurrentVersion);
                 }
             } else {
                 //To provide a helpful error, check if the version was likely a community version
@@ -398,7 +393,9 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
      *
      * @throws CommandValidationException
      */
-    private void preventVersionDowngrade(String selectedVersion) throws CommandValidationException {
+    private void preventVersionDowngrade(String selectedVersion, int majorSelectedVersion, int majorCurrentVersion,
+            int minorSelectedVersion, int minorCurrentVersion,
+            int updateSelectedVersion, int updatedCurrentVersion) throws CommandValidationException {
         StringBuilder buildCurrentVersion = new StringBuilder().append(majorCurrentVersion).append(".")
                 .append(minorCurrentVersion).append(".").append(updatedCurrentVersion);
         if (majorSelectedVersion < majorCurrentVersion) {

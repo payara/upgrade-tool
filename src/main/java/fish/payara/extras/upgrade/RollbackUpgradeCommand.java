@@ -126,7 +126,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
 
                     if (nsfe.getMessage().contains("glassfish/h2db")) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for glassfish/h2db directory under the " +
-                                "assumption this is a Payara 6 installation. Continuing to move files...");
+                                "assumption this is a distribution without the duplicate directory. Continuing to move files...");
                         continue;
                     }
 
@@ -180,7 +180,7 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
 
                     if (nsfe.getMessage().contains("glassfish/h2db")) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for glassfish/h2db directory under the " +
-                                "assumption this is a Payara 6 installation. Continuing to move files...");
+                                "assumption this is a distribution without the duplicate directory. Continuing to move files...");
                         continue;
                     }
 

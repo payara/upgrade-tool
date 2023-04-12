@@ -40,6 +40,7 @@
 
 package fish.payara.extras.upgrade;
 
+import com.sun.appserv.server.util.Version;
 import com.sun.enterprise.admin.servermgmt.cli.LocalDomainCommand;
 import com.sun.enterprise.config.serverbeans.Domain;
 import com.sun.enterprise.config.serverbeans.Node;
@@ -51,6 +52,7 @@ import com.sun.enterprise.universal.process.ProcessManager;
 import com.sun.enterprise.universal.process.ProcessManagerException;
 import com.sun.enterprise.util.SystemPropertyConstants;
 import org.glassfish.api.admin.CommandException;
+import org.glassfish.api.admin.CommandValidationException;
 import org.glassfish.hk2.api.MultiException;
 import org.glassfish.hk2.api.ServiceLocator;
 import org.glassfish.internal.api.Globals;
@@ -117,6 +119,8 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     // Used to store the CONSTANTMOVEFOLDERS and the osgi-cache directories moved in the upgrade process
     protected static String[] moveFolders;
 
+    protected boolean isWebDistributionUpgrade = false;
+
     @Override
     protected void validate() throws CommandException {
         // Perform usual validation; we don't want to skip it, we just want to add to it. Requires modification of the initDomain method
@@ -129,6 +133,9 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
         // Gets all folders and files to be moved in the upgrade process, including osgi-cache directories
         moveFolders = Stream.concat(Arrays.stream(CONSTANTMOVEFOLDERS), Arrays.stream(getOsgiCacheDirectories())).toArray((String[]::new));
         logger.log(Level.FINEST, "moveFolders resolved as {0}", String.join(", ", moveFolders));
+
+        // Validate the distribution
+        validateDistribution(parseDistributionDetails());
     }
 
     /**
@@ -193,6 +200,48 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             }
         }
         return cacheDirectories.toArray(new String[0]);
+    }
+
+    /**
+     * Parse the distribution details from the glassfish-version.properties file of the current installation.
+     *
+     * @return The name of the current distribution, or an empty String if it could not be parsed.
+     */
+    private String parseDistributionDetails() {
+        String versionDistribution = "";
+
+        // Get current Payara distribution
+        try {
+            versionDistribution = Version.getDistributionKey();
+
+            // If distribution is payara-web or payara-web-ml, record that this is a web distribution for error
+            // validation later on e.g. for when moving directories and MQ isn't found.
+            if (versionDistribution.contains("web")) {
+                isWebDistributionUpgrade = true;
+            }
+        } catch (NoSuchMethodError noSuchMethodError) {
+            logger.log(Level.FINER, "Encountered a NoSuchMethodError getting the distribution name");
+        }
+
+        return versionDistribution;
+    }
+
+    /**
+     * Gets the current Payara Distribution and validates it
+     *
+     * @throws CommandException If there is an error validating the distribution
+     */
+    protected void validateDistribution(String versionDistribution) throws CommandValidationException {
+        logger.log(Level.FINER, "Validating distribution");
+
+        // Check if distribution is defined.
+        // Continue with upgrade if no defined distribution, user should be able rollback if needed.
+        if (versionDistribution.isEmpty()) {
+            logger.log(Level.WARNING, "The distribution cannot be validated.");
+            return;
+        }
+
+        logger.log(Level.FINE, "Distribution validated as {0}", versionDistribution);
     }
 
     protected void reinstallNodes() throws IOException, CommandException, ConfigurationException {

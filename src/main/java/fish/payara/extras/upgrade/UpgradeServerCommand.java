@@ -279,36 +279,15 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         options.set(passwordParameterName, new String(passwordChars));
     }
 
-    /**
-     * Gets the current Payara Distribution and checks to see if the specified distribution is the same
-     *
-     * @throws CommandException If the distribution doesn't match.
-     */
-    private void validateDistribution() throws CommandValidationException {
-        logger.log(Level.FINER, "Validating distribution");
-
-        // Get current Payara distribution
-        String versionDistribution = "";
-        try {
-            versionDistribution = Version.getDistributionKey();
-        } catch (NoSuchMethodError noSuchMethodError) {
-
-        }
-
-        // Check if distribution is defined.
-        // Continue with upgrade if no defined distribution, user should be able rollback if needed.
-        if (versionDistribution.isEmpty()) {
-            logger.log(Level.WARNING, "The distribution cannot be validated.");
-            return;
-        }
+    @Override
+    protected void validateDistribution(String versionDistribution) throws CommandValidationException {
+        super.validateDistribution(versionDistribution);
 
         // Check if distribution is the same as the one specified.
         if (!versionDistribution.equalsIgnoreCase(distribution)) {
             throw new CommandValidationException(String.format("The current distribution (%s) you are " +
                     "running does not match the requested upgrade distribution (%s)", versionDistribution, distribution));
         }
-
-        logger.log(Level.FINE, "Distribution validated as {0}", versionDistribution);
     }
 
     @Override
@@ -326,7 +305,6 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             validateVersions();
         }
 
-        validateDistribution();
         // Create property files
         createPropertiesFile();
         createBatFile();
@@ -811,11 +789,8 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     logger.log(Level.FINEST, "Moved current install file {0} to old directory {1}",
                             new Object[]{currentFile.toString(), oldFile.toString()});
                 } catch (NoSuchFileException nsfe) {
-                    // We can't nicely check if the "current" installation is a web distribution or not ("distribution"
-                    // param is optional with "useDownloaded"), so just attempt to move all and specifically catch a
-                    // NSFE for the MQ directory
-                    if (nsfe.getMessage().contains(
-                            "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
+                    if (nsfe.getMessage().contains("glassfish" + File.separator + ".." + File.separator + "mq")
+                            && isWebDistributionUpgrade) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                     } else {
@@ -999,8 +974,9 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
             // We can't nicely check if the "new" installation is a web distribution or not ("distribution" param is
             // optional with "useDownloaded"), so specifically catch a NSFE for the MQ directory.
-            if (exc instanceof NoSuchFileException && exc.getMessage().contains(
-                    "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
+            if (exc instanceof NoSuchFileException
+                    && exc.getMessage().contains("glassfish" + File.separator + ".." + File.separator + "mq")
+                    && isWebDistributionUpgrade) {
                 logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                         "this is a payara-web distribution. Continuing fixing of permissions...");
                 return FileVisitResult.SKIP_SUBTREE;

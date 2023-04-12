@@ -107,10 +107,8 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
                     logger.log(Level.FINEST, "Moved {0} into staged rollback directory {1}",
                             new Object[]{currentDirectory.toString(), newDirectory.toString()});
                 } catch (NoSuchFileException nsfe) {
-                    // We can't nicely check if the current or old installation is a web distribution or not, so just
-                    // attempt to move all and specifically catch a NSFE for the MQ directory
-                    if (nsfe.getMessage().contains(
-                            "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
+                    if (nsfe.getMessage().contains("glassfish" + File.separator + ".." + File.separator + "mq")
+                            && isWebDistributionUpgrade) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                         continue;
@@ -161,10 +159,8 @@ public class RollbackUpgradeCommand extends BaseUpgradeCommand {
                     logger.log(Level.FINEST, "Moved old directory {0} into current install directory {1}",
                             new Object[]{oldDirectory.toString(), currentDirectory.toString()});
                 } catch (NoSuchFileException nsfe) {
-                    // We can't nicely check if the current or old installation is a web distribution or not, so just
-                    // attempt to move all and specifically catch a NSFE for the MQ directory
-                    if (nsfe.getMessage().contains(
-                            "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
+                    if (nsfe.getMessage().contains("glassfish" + File.separator + ".." + File.separator + "mq")
+                            && isWebDistributionUpgrade) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                         continue;

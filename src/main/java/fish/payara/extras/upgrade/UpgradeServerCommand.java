@@ -808,15 +808,26 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         logger.log(Level.FINE, "Copying extracted files");
 
         for (String folder : moveFolders) {
-            Path sourcePath = newVersion.resolve("payara" + getUpgradeMajorVersion() + File.separator + "glassfish" + File.separator + folder);
+            Path sourcePath = newVersion.resolve(
+                    "payara" + getUpgradeMajorVersion() + File.separator + "glassfish" + File.separator + folder);
 
             // Check that the path actually exists - some folders may have moved or be different between versions
             // For example some versions of Payara 5 have a duplicate glassfish/h2db directory
-            if (!Files.exists(sourcePath) && sourcePath.endsWith("glassfish" + File.separator + "h2db")) {
-                logger.log(Level.FINER,
-                        "Source path {0} doesn't exist, skipping under assumption this is a distribution without the duplicate directory...",
-                        sourcePath.toString());
-                continue;
+            if (!Files.exists(sourcePath)) {
+                if (sourcePath.endsWith("glassfish" + File.separator + "h2db")) {
+                    logger.log(Level.FINER,
+                            "Source path {0} doesn't exist, skipping under assumption this is a distribution without the duplicate directory...",
+                            sourcePath.toString());
+                    continue;
+                }
+
+                if (sourcePath.endsWith("glassfish" + File.separator + ".." + File.separator + "mq")
+                        && isWebDistributionUpgrade) {
+                    logger.log(Level.FINER,
+                            "Source path {0} doesn't exist, skipping under assumption this is a payara-web distribution...",
+                            sourcePath.toString());
+                    continue;
+                }
             }
 
             Path targetPath = Paths.get(glassfishDir, folder);

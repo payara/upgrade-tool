@@ -821,6 +821,7 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     continue;
                 }
 
+                // Check for the usual MQ missing in payara-web case
                 if (sourcePath.endsWith("glassfish" + File.separator + ".." + File.separator + "mq")
                         && isWebDistributionUpgrade) {
                     logger.log(Level.FINER,

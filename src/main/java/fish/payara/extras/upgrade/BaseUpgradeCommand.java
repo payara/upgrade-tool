@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright (c) 2020-2022 Payara Foundation and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020-2023 Payara Foundation and/or its affiliates. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common Development
@@ -58,7 +58,7 @@ import org.jvnet.hk2.config.ConfigParser;
 import org.jvnet.hk2.config.ConfigurationException;
 import org.jvnet.hk2.config.DomDocument;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -102,7 +102,6 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     private static final String[] CONSTANTMOVEFOLDERS = {"common",
             "config" + File.separator + "branding",
             "config" + File.separator + "osgi.properties",
-            "h2db",
             ".." + File.separator + "h2db",
             "legal",
             "modules",
@@ -204,13 +203,6 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             // added via the modules directory
             ServiceLocator serviceLocator = createServiceLocator();
             ConfigParser parser = new ConfigParser(serviceLocator);
-            try {
-                parser.logUnrecognisedElements(false);
-            } catch (NoSuchMethodError noSuchMethodError) {
-                logger.log(Level.FINE,
-                        "Using a version of ConfigParser that does not support disabling log messages via method",
-                        noSuchMethodError);
-            }
 
             URL domainURL = domainXMLFile.toURI().toURL();
             DomDocument doc = parser.parse(domainURL);

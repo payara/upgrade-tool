@@ -42,6 +42,7 @@ package fish.payara.extras.upgrade;
 import com.sun.appserv.server.util.Version;
 import com.sun.enterprise.admin.cli.CLICommand;
 import com.sun.enterprise.universal.i18n.LocalStringsImpl;
+import com.sun.enterprise.util.JDK;
 import com.sun.enterprise.util.OS;
 import com.sun.enterprise.util.StringUtils;
 import java.util.stream.Collectors;
@@ -120,6 +121,8 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     private static final LocalStringsImpl strings = new LocalStringsImpl(CLICommand.class);
 
     private static final String PERMISSIONS = "rwxr-xr-x";
+
+    private boolean isPayara6Upgrade = false;
 
     @Override
     protected void prevalidate() throws CommandException {
@@ -305,6 +308,11 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             validateVersions();
         }
 
+        // If upgrading to Payara 6, make sure we're using JDK 11 or higher
+        if (isPayara6Upgrade) {
+            validateJavaVersion();
+        }
+
         // Create property files
         createPropertiesFile();
         createBatFile();
@@ -332,10 +340,16 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                 throw new CommandValidationException(message);
             }
 
+            int upgradeMajorVersion = Integer.parseInt(matcher.group(1).trim());
+
             preventVersionDowngrade(selectedVersion,
-                    Integer.parseInt(matcher.group(1).trim()), Integer.parseInt(getCurrentMajorVersion()),
+                    upgradeMajorVersion, Integer.parseInt(getCurrentMajorVersion()),
                     Integer.parseInt(matcher.group(2).trim()), Integer.parseInt(getCurrentMinorVersion()),
                     Integer.parseInt(matcher.group(3).trim()), Integer.parseInt(getCurrentUpdatedVersion()));
+
+            if (upgradeMajorVersion == 6) {
+                isPayara6Upgrade = true;
+            }
         } else {
             //To provide a helpful error, check if the version was likely a community version
             Pattern communityPattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{4})\\.([0-9]{1,2})(?!\\W\\w+)");
@@ -448,6 +462,13 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
     protected String getUpgradeUpdateVersion() {
         //This is a list but only ever stores one value. Split on the . and get the Update version
         return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[2];
+    }
+
+    private void validateJavaVersion() throws CommandValidationException {
+        int majorVersion = JDK.getMajor();
+        if (majorVersion < 11) {
+            throw new CommandValidationException("The minimum JDK requirement for Payara 6 is JDK 11, see documentation for more details.");
+        }
     }
 
     /**
@@ -614,6 +635,10 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
             try {
                 validateVersions();
+
+                if (isPayara6Upgrade) {
+                    validateJavaVersion();
+                }
             } catch (CommandException commandException) {
                 logger.log(Level.SEVERE, commandException.toString());
                 return ERROR;

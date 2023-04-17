@@ -203,6 +203,17 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             // added via the modules directory
             ServiceLocator serviceLocator = createServiceLocator();
             ConfigParser parser = new ConfigParser(serviceLocator);
+            // Commented it out for now
+            // TODO: We potentially need to patch it back in and do our chicken-egg submodule solution for Enterprise
+            /*
+            try {
+                parser.logUnrecognisedElements(false);
+            } catch (NoSuchMethodError noSuchMethodError) {
+                logger.log(Level.FINE,
+                        "Using a version of ConfigParser that does not support disabling log messages via method",
+                        noSuchMethodError);
+            }
+            */
 
             URL domainURL = domainXMLFile.toURI().toURL();
             DomDocument doc = parser.parse(domainURL);

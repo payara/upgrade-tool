@@ -104,6 +104,7 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
     private static final String[] CONSTANTMOVEFOLDERS = {"common",
             "config" + File.separator + "branding",
             "config" + File.separator + "osgi.properties",
+            "h2db",
             ".." + File.separator + "h2db",
             "legal",
             "modules",

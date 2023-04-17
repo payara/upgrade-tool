@@ -42,6 +42,7 @@ package fish.payara.extras.upgrade;
 import com.sun.appserv.server.util.Version;
 import com.sun.enterprise.admin.cli.CLICommand;
 import com.sun.enterprise.universal.i18n.LocalStringsImpl;
+import com.sun.enterprise.util.JDK;
 import com.sun.enterprise.util.OS;
 import com.sun.enterprise.util.StringUtils;
 import java.util.stream.Collectors;
@@ -121,6 +122,8 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
 
     private static final String PERMISSIONS = "rwxr-xr-x";
 
+    private boolean isPayara6Upgrade = false;
+
     @Override
     protected void prevalidate() throws CommandException {
         // Perform usual pre-validation; we don't want to skip it or alter it in anyway, we just want to add to it
@@ -141,7 +144,6 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             if (getOption(VERSION_PARAM_NAME) == null) {
                 prevalidateParameter(VERSION_PARAM_NAME);
             }
-            preventVersionDowngrade();
 
             if (getOption(NEXUS_PASSWORD_PARAM_NAME) == null) {
                 prevalidatePasswordParameter(NEXUS_PASSWORD_PARAM_NAME);
@@ -181,109 +183,6 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         } else {
             throw new CommandValidationException(strings.get("missingOptions", parameterName));
         }
-    }
-
-    /**
-     * Method to prevent downgrade of current Payara version vs the option --version indicated for the
-     * upgrade-server command
-     *
-     * @throws CommandValidationException
-     */
-    protected void preventVersionDowngrade() throws CommandValidationException {
-        List<String> versionList = getVersion();
-        if (!versionList.isEmpty()) {
-            String selectedVersion = versionList.get(0).trim();
-            Pattern pattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{1,2})\\.([0-9]{1,2})(?!\\W\\w+)");
-            Matcher matcher = pattern.matcher(selectedVersion);
-            if (matcher.find()) {
-                if (matcher.groupCount() == 3) {
-                    int majorSelectedVersion = Integer.parseInt(matcher.group(1).trim());
-                    int minorSelectedVersion = Integer.parseInt(matcher.group(2).trim());
-                    int updateSelectedVersion = Integer.parseInt(matcher.group(3).trim());
-                    int majorCurrentVersion = Integer.parseInt(getCurrentMajorVersion());
-                    int minorCurrentVersion = Integer.parseInt(getCurrentMinorVersion());
-                    int updatedCurrentVersion = Integer.parseInt(getCurrentUpdatedVersion());
-                    StringBuilder buildCurrentVersion = new StringBuilder().append(majorCurrentVersion).append(".")
-                            .append(minorCurrentVersion).append(".").append(updatedCurrentVersion);
-                    if (majorSelectedVersion < majorCurrentVersion) {
-                        throwCommandValidationException(buildCurrentVersion.toString(), selectedVersion);
-                    } else if (!(majorSelectedVersion > majorCurrentVersion)
-                            && (minorSelectedVersion < minorCurrentVersion)) {
-                        throwCommandValidationException(buildCurrentVersion.toString(), selectedVersion);
-                    } else if (!(majorSelectedVersion > majorCurrentVersion)
-                            && !(minorSelectedVersion > minorCurrentVersion)
-                            && (updateSelectedVersion < updatedCurrentVersion)) {
-                        throwCommandValidationException(buildCurrentVersion.toString(), selectedVersion);
-                    } else if (selectedVersion.equalsIgnoreCase(buildCurrentVersion.toString())) {
-                        String message = String
-                                .format("It was selected the same version: selected version %s and current version %s" +
-                                                ", please verify and try again",
-                                        selectedVersion, buildCurrentVersion);
-                        throw new CommandValidationException(message);
-                    }
-                } else {
-                    String message = String.format("Invalid selected version %s, please verify and try again",
-                            selectedVersion);
-                    throw new CommandValidationException(message);
-                }
-            } else {
-                //To provide a helpful error, check if the version was likely a community version
-                Pattern communityPattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{4})\\.([0-9]{1,2})(?!\\W\\w+)");
-                Matcher communityMatcher = communityPattern.matcher(selectedVersion);
-                if (communityMatcher.find()) {
-                    String message = String.format("%s is a Payara Community version. You can only upgrade to a Payara Enterprise version",
-                            selectedVersion);
-                    throw new CommandValidationException(message);
-                }
-
-                //If it wasn't a community version it's likely random text
-                String message = String.format("Invalid selected version %s, please verify and try again",
-                        selectedVersion);
-                throw new CommandValidationException(message);
-            }
-        } else {
-            String message = "Empty selected version, please verify and try again";
-            throw new CommandValidationException(message);
-        }
-    }
-
-    /**
-     * Method to get selected Payara version from Upgrade command
-     *
-     * @return List<String>
-     */
-    protected List<String> getVersion() {
-        return options.get(VERSION_PARAM_NAME);
-    }
-
-    /**
-     * Method to get the Payara version being upgraded to Major Version
-     *
-     * @return Major version of the Payara distribution being upgraded to as a String
-     */
-    protected String getUpgradeMajorVersion() {
-        //This is a list but only ever stores one value. Split on the . and get the Major version
-        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[0];
-    }
-
-    /**
-     * Method to get the Payara version being upgraded to Minor Version
-     *
-     * @return Minor version of the Payara distribution being upgraded to as a String
-     */
-    protected String getUpgradeMinorVersion() {
-        //This is a list but only ever stores one value. Split on the . and get the Minor version
-        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[1];
-    }
-
-    /**
-     * Method to get the Payara version being upgraded to Update Version
-     *
-     * @return Update version of the Payara distribution being upgraded to as a String
-     */
-    protected String getUpgradeUpdateVersion() {
-        //This is a list but only ever stores one value. Split on the . and get the Update version
-        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[2];
     }
 
     /**
@@ -341,33 +240,6 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         }
     }
 
-    /**
-     * Method to get the Current Payara Major Version
-     *
-     * @return String
-     */
-    protected String getCurrentMajorVersion() {
-        return Version.getMajorVersion().trim();
-    }
-
-    /**
-     * Method to get the Current Payara Minor Version
-     *
-     * @return String
-     */
-    protected String getCurrentMinorVersion() {
-        return Version.getMinorVersion().trim();
-    }
-
-    /**
-     * Method to get the Current Payara Updated Version
-     *
-     * @return String
-     */
-    protected String getCurrentUpdatedVersion() {
-        return Version.getUpdateVersion().trim();
-    }
-
     protected void throwCommandValidationException(String currentVersion, String selectedVersion)
             throws CommandValidationException {
         String message = String.format("The version indicated is incorrect. You can't downgrade " +
@@ -410,36 +282,15 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         options.set(passwordParameterName, new String(passwordChars));
     }
 
-    /**
-     * Gets the current Payara Distribution and checks to see if the specified distribution is the same
-     *
-     * @throws CommandException If the distribution doesn't match.
-     */
-    private void validateDistribution() throws CommandValidationException {
-        logger.log(Level.FINER, "Validating distribution");
-
-        // Get current Payara distribution
-        String versionDistribution = "";
-        try {
-            versionDistribution = Version.getDistributionKey();
-        } catch (NoSuchMethodError noSuchMethodError) {
-
-        }
-
-        // Check if distribution is defined.
-        // Continue with upgrade if no defined distribution, user should be able rollback if needed.
-        if (versionDistribution.isEmpty()) {
-            logger.log(Level.WARNING, "The distribution cannot be validated.");
-            return;
-        }
+    @Override
+    protected void validateDistribution(String versionDistribution) throws CommandValidationException {
+        super.validateDistribution(versionDistribution);
 
         // Check if distribution is the same as the one specified.
         if (!versionDistribution.equalsIgnoreCase(distribution)) {
             throw new CommandValidationException(String.format("The current distribution (%s) you are " +
                     "running does not match the requested upgrade distribution (%s)", versionDistribution, distribution));
         }
-
-        logger.log(Level.FINE, "Distribution validated as {0}", versionDistribution);
     }
 
     @Override
@@ -453,10 +304,171 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             throw new CommandValidationException("Non-staged upgrades are not supported on Windows.");
         }
 
-        validateDistribution();
+        if (getOption(USE_DOWNLOADED_PARAM_NAME) == null) {
+            validateVersions();
+        }
+
+        // If upgrading to Payara 6, make sure we're using JDK 11 or higher
+        if (isPayara6Upgrade) {
+            validateJavaVersion();
+        }
+
         // Create property files
         createPropertiesFile();
         createBatFile();
+    }
+
+    /**
+     * Parses the current and future versions and validates them.
+     *
+     * @throws CommandValidationException
+     */
+    protected void validateVersions() throws CommandValidationException {
+        List<String> versionList = getVersion();
+        if (versionList.isEmpty()) {
+            String message = "Empty selected version, please verify and try again";
+            throw new CommandValidationException(message);
+        }
+
+        String selectedVersion = versionList.get(0).trim();
+        Pattern pattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{1,2})\\.([0-9]{1,2})(?!\\W\\w+)");
+        Matcher matcher = pattern.matcher(selectedVersion);
+        if (matcher.find()) {
+            if (matcher.groupCount() != 3) {
+                String message = String.format("Invalid selected version %s, please verify and try again",
+                        selectedVersion);
+                throw new CommandValidationException(message);
+            }
+
+            int upgradeMajorVersion = Integer.parseInt(matcher.group(1).trim());
+
+            preventVersionDowngrade(selectedVersion,
+                    upgradeMajorVersion, Integer.parseInt(getCurrentMajorVersion()),
+                    Integer.parseInt(matcher.group(2).trim()), Integer.parseInt(getCurrentMinorVersion()),
+                    Integer.parseInt(matcher.group(3).trim()), Integer.parseInt(getCurrentUpdatedVersion()));
+
+            if (upgradeMajorVersion == 6) {
+                isPayara6Upgrade = true;
+            }
+        } else {
+            //To provide a helpful error, check if the version was likely a community version
+            Pattern communityPattern = Pattern.compile("([0-9]{1,2})\\.([0-9]{4})\\.([0-9]{1,2})(?!\\W\\w+)");
+            Matcher communityMatcher = communityPattern.matcher(selectedVersion);
+            if (communityMatcher.find()) {
+                String message = String.format("%s is a Payara Community version. You can only upgrade to a Payara Enterprise version",
+                        selectedVersion);
+                throw new CommandValidationException(message);
+            }
+
+            //If it wasn't a community version it's likely random text
+            String message = String.format("Invalid selected version %s, please verify and try again",
+                    selectedVersion);
+            throw new CommandValidationException(message);
+        }
+    }
+
+    /**
+     * Method to prevent downgrade of current Payara version vs the option --version indicated for the
+     * upgrade-server command
+     *
+     * @throws CommandValidationException
+     */
+    private void preventVersionDowngrade(String selectedVersion,
+            int majorSelectedVersion, int majorCurrentVersion,
+            int minorSelectedVersion, int minorCurrentVersion,
+            int updateSelectedVersion, int updatedCurrentVersion) throws CommandValidationException {
+        StringBuilder buildCurrentVersion = new StringBuilder().append(majorCurrentVersion).append(".")
+                .append(minorCurrentVersion).append(".").append(updatedCurrentVersion);
+        if (majorSelectedVersion < majorCurrentVersion) {
+            throwCommandValidationException(buildCurrentVersion.toString(), selectedVersion);
+        } else if (!(majorSelectedVersion > majorCurrentVersion)
+                && (minorSelectedVersion < minorCurrentVersion)) {
+            throwCommandValidationException(buildCurrentVersion.toString(), selectedVersion);
+        } else if (!(majorSelectedVersion > majorCurrentVersion)
+                && !(minorSelectedVersion > minorCurrentVersion)
+                && (updateSelectedVersion < updatedCurrentVersion)) {
+            throwCommandValidationException(buildCurrentVersion.toString(), selectedVersion);
+        } else if (selectedVersion.equalsIgnoreCase(buildCurrentVersion.toString())) {
+            String message = String
+                    .format("It was selected the same version: selected version %s and current version %s" +
+                                    ", please verify and try again",
+                            selectedVersion, buildCurrentVersion);
+            throw new CommandValidationException(message);
+        }
+    }
+
+    /**
+     * Method to get selected Payara version from Upgrade command
+     *
+     * @return List<String>
+     */
+    protected List<String> getVersion() {
+        return options.get(VERSION_PARAM_NAME);
+    }
+
+
+    /**
+     * Method to get the Current Payara Major Version
+     *
+     * @return String
+     */
+    protected String getCurrentMajorVersion() {
+        return Version.getMajorVersion().trim();
+    }
+
+    /**
+     * Method to get the Current Payara Minor Version
+     *
+     * @return String
+     */
+    protected String getCurrentMinorVersion() {
+        return Version.getMinorVersion().trim();
+    }
+
+    /**
+     * Method to get the Current Payara Updated Version
+     *
+     * @return String
+     */
+    protected String getCurrentUpdatedVersion() {
+        return Version.getUpdateVersion().trim();
+    }
+
+    /**
+     * Method to get the Payara version being upgraded to Major Version
+     *
+     * @return Major version of the Payara distribution being upgraded to as a String
+     */
+    protected String getUpgradeMajorVersion() {
+        //This is a list but only ever stores one value. Split on the . and get the Major version
+        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[0];
+    }
+
+    /**
+     * Method to get the Payara version being upgraded to Minor Version
+     *
+     * @return Minor version of the Payara distribution being upgraded to as a String
+     */
+    protected String getUpgradeMinorVersion() {
+        //This is a list but only ever stores one value. Split on the . and get the Minor version
+        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[1];
+    }
+
+    /**
+     * Method to get the Payara version being upgraded to Update Version
+     *
+     * @return Update version of the Payara distribution being upgraded to as a String
+     */
+    protected String getUpgradeUpdateVersion() {
+        //This is a list but only ever stores one value. Split on the . and get the Update version
+        return options.get(VERSION_PARAM_NAME).get(0).split("\\.")[2];
+    }
+
+    private void validateJavaVersion() throws CommandValidationException {
+        int majorVersion = JDK.getMajor();
+        if (majorVersion < 11) {
+            throw new CommandValidationException("The minimum JDK requirement for Payara 6 is JDK 11, see documentation for more details.");
+        }
     }
 
     /**
@@ -622,7 +634,11 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             }
 
             try {
-                preventVersionDowngrade();
+                validateVersions();
+
+                if (isPayara6Upgrade) {
+                    validateJavaVersion();
+                }
             } catch (CommandException commandException) {
                 logger.log(Level.SEVERE, commandException.toString());
                 return ERROR;
@@ -798,11 +814,8 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                     logger.log(Level.FINEST, "Moved current install file {0} to old directory {1}",
                             new Object[]{currentFile.toString(), oldFile.toString()});
                 } catch (NoSuchFileException nsfe) {
-                    // We can't nicely check if the "current" installation is a web distribution or not ("distribution"
-                    // param is optional with "useDownloaded"), so just attempt to move all and specifically catch a
-                    // NSFE for the MQ directory
-                    if (nsfe.getMessage().contains(
-                            "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
+                    if (nsfe.getMessage().contains("glassfish" + File.separator + ".." + File.separator + "mq")
+                            && isWebDistributionUpgrade) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
                     } else {
@@ -820,7 +833,29 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         logger.log(Level.FINE, "Copying extracted files");
 
         for (String folder : moveFolders) {
-            Path sourcePath = newVersion.resolve("payara" + getUpgradeMajorVersion() + File.separator + "glassfish" + File.separator + folder);
+            Path sourcePath = newVersion.resolve(
+                    "payara" + getUpgradeMajorVersion() + File.separator + "glassfish" + File.separator + folder);
+
+            // Check that the path actually exists - some folders may have moved or be different between versions
+            // For example some versions of Payara 5 have a duplicate glassfish/h2db directory
+            if (!Files.exists(sourcePath)) {
+                if (sourcePath.endsWith("glassfish" + File.separator + "h2db")) {
+                    logger.log(Level.FINER,
+                            "Source path {0} doesn't exist, skipping under assumption this is a distribution without the duplicate directory...",
+                            sourcePath.toString());
+                    continue;
+                }
+
+                // Check for the usual MQ missing in payara-web case
+                if (sourcePath.endsWith("glassfish" + File.separator + ".." + File.separator + "mq")
+                        && isWebDistributionUpgrade) {
+                    logger.log(Level.FINER,
+                            "Source path {0} doesn't exist, skipping under assumption this is a payara-web distribution...",
+                            sourcePath.toString());
+                    continue;
+                }
+            }
+
             Path targetPath = Paths.get(glassfishDir, folder);
             if (stage) {
                 targetPath = Paths.get(targetPath + ".new");
@@ -976,8 +1011,9 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
         public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
             // We can't nicely check if the "new" installation is a web distribution or not ("distribution" param is
             // optional with "useDownloaded"), so specifically catch a NSFE for the MQ directory.
-            if (exc instanceof NoSuchFileException && exc.getMessage().contains(
-                    "payara5" + File.separator + "glassfish" + File.separator + ".." + File.separator + "mq")) {
+            if (exc instanceof NoSuchFileException
+                    && exc.getMessage().contains("glassfish" + File.separator + ".." + File.separator + "mq")
+                    && isWebDistributionUpgrade) {
                 logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                         "this is a payara-web distribution. Continuing fixing of permissions...");
                 return FileVisitResult.SKIP_SUBTREE;
@@ -986,6 +1022,13 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
             if (exc instanceof NoSuchFileException && exc.getMessage().contains("osgi-cache")) {
                 logger.log(Level.FINE,
                         "Ignoring NoSuchFileException for osgi-cache directory. Continuing fixing of permissions...");
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+            // glassfish/h2db directory doesn't exist in a Payara 6 install so can be safely ignored
+            if (exc instanceof NoSuchFileException && exc.getMessage().contains("glassfish/h2db")) {
+                logger.log(Level.FINE,
+                        "Ignoring NoSuchFileException for glassfish/h2db directory under assumption this is a " +
+                                "distribution without this duplicate directory. Continuing fixing of permissions...");
                 return FileVisitResult.SKIP_SUBTREE;
             }
 

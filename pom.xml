@@ -46,7 +46,7 @@
 
     <groupId>fish.payara.extras</groupId>
     <artifactId>payara-upgrade-tool</artifactId>
-    <version>2.0</version>
+    <version>2.0-SNAPSHOT</version>
     <packaging>glassfish-jar</packaging>
     <name>Payara Upgrade Tool</name>
 
@@ -55,7 +55,7 @@
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <payara.version>6.1.0-SNAPSHOT</payara.version>
+        <payara.version>6.0.0</payara.version>
         <hk2.version>3.0.1.payara-p3</hk2.version>
     </properties>
 

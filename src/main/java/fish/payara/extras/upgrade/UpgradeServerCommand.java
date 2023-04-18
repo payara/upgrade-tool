@@ -818,6 +818,9 @@ public class UpgradeServerCommand extends BaseUpgradeCommand {
                             && isWebDistributionUpgrade) {
                         logger.log(Level.FINE, "Ignoring NoSuchFileException for mq directory under assumption " +
                                 "this is a payara-web distribution. Continuing to move files...");
+                    } else if (nsfe.getMessage().contains("glassfish" + File.separator + "h2db")) {
+                        logger.log(Level.FINE, "Ignoring NoSuchFileException for h2db directory under assumption " +
+                                "this is a distribution without the duplicate directory...");
                     } else {
                         throw nsfe;
                     }

@@ -55,7 +55,7 @@
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <payara.version>6.0.0</payara.version>
+        <payara.version>6.2.0-SNAPSHOT</payara.version>
         <hk2.version>3.0.1.payara-p3</hk2.version>
     </properties>
 

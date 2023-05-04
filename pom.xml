@@ -78,6 +78,10 @@
             <id>payara-nexus-enterprise-distributions</id>
             <url>https://nexus.payara.fish/repository/payara-enterprise/</url>
         </repository>
+        <snapshotRepository>
+            <id>payara-nexus-enterprise-snapshots</id>
+            <url>https://nexus.payara.fish/repository/payara-enterprise-snapshots-private/</url>
+        </snapshotRepository>
     </distributionManagement>
 
     <dependencies>

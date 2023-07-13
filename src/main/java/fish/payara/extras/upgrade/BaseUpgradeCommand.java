@@ -80,6 +80,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.sun.enterprise.util.io.DomainDirs.getDefaultDomainsDir;
@@ -194,8 +195,8 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             String osgiCacheDir = "domains" + File.separator + domaindir.getName() + File.separator + "osgi-cache";
             // Only add the osgi-cache directory if it exists to avoid file not found warnings.
             // When rolling back, an old cache may exist but no new cache if the domain wasn't started, include these
-            if (new File(glassfishDir + File.separator + osgiCacheDir).exists() ||
-                    new File(glassfishDir + File.separator + osgiCacheDir + ".old").exists()) {
+            if (new File(glassfishDir, osgiCacheDir).exists() ||
+                    new File(glassfishDir, osgiCacheDir + ".old").exists()) {
                 cacheDirectories.add(osgiCacheDir);
             }
         }
@@ -276,9 +277,34 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
                         throwException = true;
                         failingNodes.add(node.getName());
                     }
+                } else if (node.getType().equals("CONFIG")) {
+                    // For local instances, remove osgi-cache content
+                    foundNode = true;
+                    String nodeDir = node.getInstallDir();
+                    // nodeDir can contain variable, evaluate it
+                    nodeDir = nodeDir.replace("${com.sun.aas.productRoot}", System.getProperty("com.sun.aas.productRoot"));
+                    Path nodePath = Paths.get(nodeDir, "glassfish", "nodes", node.getName());
+                    if (Files.exists(nodePath)) {
+                        List<Exception> exceptions = Files.list(nodePath)
+                                .map(p -> p.resolve("osgi-cache")) // interested in osgi-cache subdirectories
+                                .filter(p -> p.toFile().exists()) // only if it exists
+                                .peek(p -> logger.fine(String.format("Deleting osgi-cache for local instance, path %s", p)))
+                                .flatMap(p -> Stream.of(p.toFile().listFiles())) // process subdirectories, not osgi-cache itself
+                                .map(f -> f.toPath())
+                                .map(p -> deleteDirectoryRecursively(p)) // delete all the directories
+                                .filter(e -> e != null)
+                                .collect(Collectors.toList()); // collect all exceptions
+                        if (!exceptions.isEmpty()) {
+                            exceptions.stream().forEach(e -> logger.log(Level.SEVERE, e.getMessage(), e));
+                            throwException = true;
+                            failingNodes.add(node.getName());
+                        }
+                    } else {
+                        logger.fine(String.format("Node directory %s not found, skipping.", nodePath));
+                    }
                 } else if (!node.isDefaultLocalNode()) {
                     foundNode = true;
-                    logger.log(Level.WARNING, String.format("Only the SSH nodes are upgraded by this tool, " +
+                    logger.log(Level.WARNING, String.format("Only the SSH and local nodes are upgraded by this tool, " +
                                     "please upgrade your node with name %s of type %s manually", node.getName(),
                             node.getType()));
                 }
@@ -291,6 +317,15 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
             if (throwException) {
                 throw new CommandException("Error reinstalling nodes: " + String.join(", ", failingNodes));
             }
+        }
+    }
+
+    private IOException deleteDirectoryRecursively(Path dir) {
+        try {
+            Files.walkFileTree(dir, new DeleteFileVisitor());
+            return null;
+        } catch (IOException e) {
+            return e;
         }
     }
 

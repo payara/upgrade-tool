@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright (c) 2020-2022 Payara Foundation and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020-2023 Payara Foundation and/or its affiliates. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common Development
@@ -276,13 +276,16 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
                         throwException = true;
                         failingNodes.add(node.getName());
                     }
-                } else if (node.getType().equals("CONFIG")) {
+                } else if (node.getType().equals("CONFIG") && node.isLocal()) {
                     // For local instances, remove osgi-cache content
                     foundNode = true;
-                    String nodeDir = node.getInstallDir();
-                    // nodeDir can contain variable, evaluate it
-                    nodeDir = nodeDir.replaceAll("\\$\\{com.sun.aas.productRoot\\}", System.getProperty("com.sun.aas.productRoot"));
-                    Path nodePath = Paths.get(nodeDir, "glassfish", "nodes", node.getName());
+                    Path nodePath;
+                    if (node.getNodeDir() == null || "".equals(node.getNodeDir())) {
+                        String nodeDir = evaluateVariables(node.getInstallDir());
+                        nodePath = Paths.get(nodeDir, "glassfish", "nodes", node.getName());
+                    } else {
+                        nodePath = Paths.get(evaluateVariables(node.getNodeDir()), node.getName());
+                    }
                     if (Files.exists(nodePath)) {
                         List<Exception> exceptions = Files.list(nodePath)
                                 .map(p -> p.resolve("osgi-cache")) // interested in osgi-cache subdirectories
@@ -317,6 +320,10 @@ public abstract class BaseUpgradeCommand extends LocalDomainCommand {
                 throw new CommandException("Error reinstalling nodes: " + String.join(", ", failingNodes));
             }
         }
+    }
+
+    private static String evaluateVariables(String nodeDir) {
+        return nodeDir.replace("${com.sun.aas.productRoot}", System.getProperty("com.sun.aas.productRoot"));
     }
 
     private IOException deleteDirectoryRecursively(Path dir) {

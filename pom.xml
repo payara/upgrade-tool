@@ -67,7 +67,7 @@
             <url>https://nexus.dev.payara.fish/repository/payara-enterprise-artifacts-private</url>
         </repository>
         <repository>
-            <id>payara-nexus</id>
+            <id>payara-nexus-artifacts</id>
             <name>Payara Public Artifacts</name>
             <url>https://nexus.dev.payara.fish/repository/payara-artifacts/</url>
         </repository>
@@ -107,7 +107,7 @@
 
     <pluginRepositories>
         <pluginRepository>
-            <id>payara-nexus</id>
+            <id>payara-nexus-artifacts</id>
             <name>Payara Public Artifacts</name>
             <url>https://nexus.dev.payara.fish/repository/payara-artifacts/</url>
             <releases>

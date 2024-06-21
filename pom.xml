@@ -205,7 +205,7 @@
             <plugin>
                 <groupId>org.glassfish.hk2</groupId>
                 <artifactId>osgiversion-maven-plugin</artifactId>
-                <version>2.6.1.payara-p1</version>
+                <version>3.0.1.payara-p4</version>
                 <executions>
                     <execution>
                         <id>default-compute-osgi-version</id>
